@@ -8,6 +8,7 @@ ctypes."""
 import os
 import ctypes as ct
 from weakref import \
+    ref as weak_ref, \
     WeakValueDictionary
 import array
 from collections import \
@@ -364,6 +365,7 @@ StructStatVFS = namedtuple("StructStatVFS", tuple(f[0] for f in SMBC.c_statvfs_t
 Dirent = namedtuple("Dirent", ("smbc_type", "dirlen", "comment", "name"))
 FileInfo = namedtuple("FileInfo", tuple(f[0] for f in SMBC.file_info._fields_))
 PrintJobInfo = namedtuple("PrintJobInfo", tuple(f[0] for f in SMBC.print_job_info._fields_))
+NotifyCallbackAction = namedtuple("NotifyCallbackAction", ("action", "filename"))
 
 THOUSAND = 1000
 MILLION = THOUSAND * THOUSAND
@@ -1474,11 +1476,20 @@ class Dir(GenericFile) :
     "represents an open libsmbclient directory. Do not instantiate directly;" \
     " get from Context.opendir method."
 
-    __slots__ = () # to forestall typos
+    __slots__ = \
+        ( # to forestall typos
+            "_notify_action",
+            # need to keep references to ctypes-wrapped functions
+            # so they don't disappear prematurely:
+            "_wrap_notify_action",
+        )
 
     def __new__(celf, _smbobj, _parent) :
+        self = GenericFile.__new__(celf, _smbobj, _parent, "FunctionClosedir")
+        self._notify_action = None
+        self._wrap_notify_action = None
         return \
-            GenericFile.__new__(celf, _smbobj, _parent, "FunctionClosedir")
+            self
     #end __new__
 
     def get_all_dents(self) :
@@ -1543,8 +1554,54 @@ class Dir(GenericFile) :
         #end if
     #end lseekdir
 
-    def notify(self, TBD) :
-        TBD
+    def notify(self, recursive, filter, timeout, notifier) :
+
+        w_self = weak_ref(self)
+
+        @SMBC.notify_callback_fn
+        def c_notifier(c_actions, nr_actions, _) :
+            self = w_self()
+            assert self != None, "parent Dir has gone away"
+            actions = []
+            for i in range(nr_actions) :
+                item = c_actions[i]
+                actions.append \
+                  (
+                    NotifyCallbackAction(action = item.action, filename = item.filename.value)
+                  )
+            #end if
+            result = notifier(actions)
+            if not isinstance(result, int) :
+                raise TypeError("notifier result must be int")
+            #end if
+            if result != 0 :
+                # no more calls expected
+                self._notify_action = None
+                self._wrap_notify_action = None
+            #end if
+            return \
+                result
+        #end c_notifier
+
+    #begin notify
+        if (
+                smbc.smbc_getFunctionNotify(self.parent._smbobj)
+                    (
+                        self.parent._smbobj,
+                        self._smbobj,
+                        recursive,
+                        filter,
+                        round(timeout * 1000),
+                        c_notifier,
+                        None
+                    )
+            !=
+                0
+        ) :
+            raise SMBError("setting directory notifications")
+        #end if
+        self._notify_action = notifier
+        self._wrap_notify_action = c_notifier
     #end notify
 
 #end Dir
