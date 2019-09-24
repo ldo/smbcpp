@@ -269,8 +269,8 @@ class SMBC :
     CTX_FLAG_NO_AUTO_ANONYMOUS_LOGON = 1 << 2
     CTX_FLAG_USE_CCACHE = 1 << 3
 
-    get_auth_data_fn = ct.CFUNCTYPE(None, ct.c_char_p, ct.c_char_p, ct.c_char_p, ct.c_char_p, ct.c_int, ct.c_char_p, ct.c_int, ct.c_char_p, ct.c_int)
-    get_auth_data_with_context_fn = ct.CFUNCTYPE(None, ct.c_char_p, ct.c_char_p, ct.c_char_p, ct.c_char_p, ct.c_int, ct.c_char_p, ct.c_int, ct.c_char_p, ct.c_int)
+    get_auth_data_fn = ct.CFUNCTYPE(None, ct.c_char_p, ct.c_char_p, ct.POINTER(ct.c_char), ct.c_int, ct.POINTER(ct.c_char), ct.c_int, ct.POINTER(ct.c_char), ct.c_int)
+    get_auth_data_with_context_fn = ct.CFUNCTYPE(None, ct.c_char_p, ct.c_char_p, ct.POINTER(ct.c_char), ct.c_int, ct.POINTER(ct.c_char), ct.c_int, ct.POINTER(ct.c_char), ct.c_int)
     list_print_job_fn = ct.CFUNCTYPE(None, ct.POINTER(print_job_info))
     check_server_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, SRVptr)
     remove_unused_server_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, SRVptr)
