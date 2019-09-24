@@ -188,7 +188,7 @@ class SMBC :
                 ("smbc_type", ct.c_uint),
                 ("dirlen", ct.c_uint),
                 ("commentlen", ct.c_uint),
-                ("comment", ct.c_char_p),
+                ("comment", ct.POINTER(ct.c_char)),
                 ("namelen", ct.c_uint),
                 ("name", ct.c_char * 0),
             ]
@@ -361,7 +361,7 @@ class SMBC :
 
 StructStat = namedtuple("StructStat", tuple(f[0] for f in SMBC.c_stat_t._fields_))
 StructStatVFS = namedtuple("StructStatVFS", tuple(f[0] for f in SMBC.c_statvfs_t._fields_))
-Dirent = namedtuple("Dirent", tuple(f[0] for f in SMBC.dirent._fields_))
+Dirent = namedtuple("Dirent", ("smbc_type", "dirlen", "comment", "name"))
 FileInfo = namedtuple("FileInfo", tuple(f[0] for f in SMBC.file_info._fields_))
 PrintJobInfo = namedtuple("PrintJobInfo", tuple(f[0] for f in SMBC.print_job_info._fields_))
 
@@ -676,8 +676,9 @@ def decode_bytes0(b, decode) :
 #end decode_bytes0
 
 def decode_dirent(de) :
-    comment = ct.cast(ct.addressof(de.comment), ct.POINTER(de.commentlen * ct.c_char)).value
-    name = ct.cast(ct.addressof(de) + ct.sizeof(SMBC.dirent), ct.POINTER(de.namelen * ct.c_char)).value
+    comment = bytes(ct.cast(de.comment, ct.POINTER(de.commentlen * ct.c_char)).contents)
+    name = bytes(ct.cast(ct.addressof(de) + ct.sizeof(SMBC.dirent) + 1, ct.POINTER(de.namelen * ct.c_char)).contents)
+      # not sure why I need to add 1 to offset
     return \
         Dirent \
           (
