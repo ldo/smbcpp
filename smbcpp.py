@@ -864,8 +864,8 @@ class Context :
               (*(
                 (lambda x : x, decode_timespec)[f[0].endswith("tim")](getattr(info, f[0]))
                 for f in SMBC.c_stat_t._fields_
-                if not f[0].startswith("Ṕ"))
-              )
+                if not f[0].startswith("Ṕ")
+              ))
     #end stat
 
     def statvfs(self, fname) :
@@ -876,11 +876,11 @@ class Context :
         #end if
         return \
             StructStatVFS \
-              (
-                *(getattr(info, f[0])
+              (*(
+                getattr(info, f[0])
                 for f in SMBC.c_statvfs_t._fields_
-                if not f[0].startswith("Ṕ"))
-              )
+                if not f[0].startswith("Ṕ")
+              ))
     #end statvfs
 
     def mkdir(self, fname, mode) :
@@ -1500,20 +1500,31 @@ class Dir(GenericFile) :
     #end get_all_dents
 
     def readdir(self) :
-        result = smbc.smbc_getFunctionReaddir(self.parent._smbobj)(self.parent._smbobj, self._smbobj)
-        if result == None :
-            raise SMBError("reading directory entry")
+        result = ct.cast(smbc.smbc_getFunctionReaddir(self.parent._smbobj)(self.parent._smbobj, self._smbobj), ct.c_void_p)
+        if result.value == None :
+            result = None
+        else :
+            result = decode_dirent(ct.cast(result, ct.c_void_p))
         #end if
         return \
-            decode_dirent(ct.cast(result, ct.c_void_p))
+            result
     #end readdir
 
     def readdirplus(self) :
-        result = smbc.smbc_getFunctionReaddirPlus(self.parent._smbobj)(self.parent._smbobj, self._smbobj)
-        if result == None :
-            raise SMBError("reading directory file_info entry")
+        result = ct.cast(smbc.smbc_getFunctionReaddirPlus(self.parent._smbobj)(self.parent._smbobj, self._smbobj), ct.c_void_p)
+        if result.value == None :
+            result = None
+        else :
+            info = ct.cast(result, ct.POINTER(SMBC.file_info)).contents
+            result = \
+            FileInfo \
+              (*(
+                (lambda x : x, decode_timespec)[f[0].endswith("time_ts")](getattr(info, f[0]))
+                for f in SMBC.file_info._fields_
+              ))
         #end if
-        TBD
+        return \
+            result
     #end readdirplus
 
     def telldir(self) :
