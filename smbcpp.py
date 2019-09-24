@@ -637,7 +637,7 @@ class FBytes :
         assert max == self.max
         typ = len(self._val) * ct.c_char
         dest = ct.cast(dst, ct.POINTER(typ))
-        dest.contents = typ(*tuple(c for c in self._val))
+        dest[0].value = self._val
     #end store
 
     def __repr__(self) :
@@ -677,7 +677,6 @@ def decode_bytes0(b, decode) :
 
 def decode_dirent(adr) :
     de = ct.cast(adr, ct.POINTER(SMBC.dirent)).contents
-    print("%sde@%#08x[%d => %d] = %s, namelen = %d" % (adr, adr.value, ct.sizeof(SMBC.dirent), len(bytes(de)), bytes(de), de.namelen)) # debug
     comment = bytes(ct.cast(de.comment, ct.POINTER(de.commentlen * ct.c_char)).contents)
     name = bytes(ct.cast(adr.value + 28, ct.POINTER(de.namelen * ct.c_char)).contents)
       # 28 instead of 32 to exclude padding on end of dirent struct
@@ -813,9 +812,7 @@ class Context :
 
     def opendir(self, fname) :
         c_fname = encode_str0(fname)
-        print("enter opendir, self = %s, func = %s" % (repr(self._smbobj), repr(smbc.smbc_getFunctionOpendir(self._smbobj)))) # debug
         file_smbobj = smbc.smbc_getFunctionOpendir(self._smbobj)(self._smbobj, c_fname)
-        print("called functionopendir, result = %s" % repr(file_smbobj)) # debug
         if file_smbobj == None :
             raise SMBError("opening directory File %s" % repr(fname))
         #end if
@@ -1133,6 +1130,7 @@ def def_context_extra(Context) :
             wg.store(c_wg, wglen)
             un.store(c_un, unlen)
             pw.store(c_pw, pwlen)
+            print("stored: wg = %s, un = %s, pw = %s" % (repr(c_wg.contents), repr(c_un.contents), repr(ct.cast(c_pw, ct.POINTER(ct.c_char * pwlen)).contents.value))) # debug
         #end wrap_auth_data_fn
 
     #begin def_wrap_auth_data_fn
