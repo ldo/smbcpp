@@ -675,10 +675,12 @@ def decode_bytes0(b, decode) :
         b
 #end decode_bytes0
 
-def decode_dirent(de) :
+def decode_dirent(adr) :
+    de = ct.cast(adr, ct.POINTER(SMBC.dirent)).contents
+    print("%sde@%#08x[%d => %d] = %s, namelen = %d" % (adr, adr.value, ct.sizeof(SMBC.dirent), len(bytes(de)), bytes(de), de.namelen)) # debug
     comment = bytes(ct.cast(de.comment, ct.POINTER(de.commentlen * ct.c_char)).contents)
-    name = bytes(ct.cast(ct.addressof(de) + ct.sizeof(SMBC.dirent) + 1, ct.POINTER(de.namelen * ct.c_char)).contents)
-      # not sure why I need to add 1 to offset
+    name = bytes(ct.cast(adr.value + 28, ct.POINTER(de.namelen * ct.c_char)).contents)
+      # 28 instead of 32 to exclude padding on end of dirent struct
     return \
         Dirent \
           (
@@ -1123,7 +1125,6 @@ def def_context_extra(Context) :
 
         @SMBC.get_auth_data_fn
         def wrap_auth_data_fn(c_srv, c_shr, c_wg, wglen, c_un, unlen, c_pw, pwlen) :
-            print("wrap_auth_data_fn") # debug
             wg = FBytes(c_wg, wglen)
             un = FBytes(c_un, unlen)
             pw = FBytes(c_pw, pwlen)
@@ -1471,17 +1472,19 @@ class Dir(GenericFile) :
 
     def get_all_dents(self) :
         self.lseekdir(0)
-        c_info = SMBC.dirent()
+        name_extra = 256
+        info_buf = ((ct.sizeof(SMBC.dirent) + name_extra) * ct.c_ubyte)()
+        c_info_ptr = ct.cast(ct.addressof(info_buf), ct.POINTER(SMBC.dirent))
         func = smbc.smbc_getFunctionGetdents(self.parent._smbobj)
         while True :
-            result = func(self.parent._smbobj, self._smbobj, ct.byref(c_info), 1)
+            result = func(self.parent._smbobj, self._smbobj, c_info_ptr, ct.sizeof(info_buf))
             if result <= 0 :
                 if result < 0 :
                     raise SMBError("getting directory entries")
                 #end if
                 break
             #end if
-            yield decode_dirent(c_info)
+            yield decode_dirent(ct.cast(c_info_ptr, ct.c_void_p))
         #end while
     #end get_all_dents
 
@@ -1491,7 +1494,7 @@ class Dir(GenericFile) :
             raise SMBError("reading directory entry")
         #end if
         return \
-            decode_dirent(result.contents)
+            decode_dirent(ct.cast(result, ct.c_void_p))
     #end readdir
 
     def readdirplus(self) :
