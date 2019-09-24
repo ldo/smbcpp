@@ -359,8 +359,8 @@ class SMBC :
 
 #end SMBC
 
-StructStat = namedtuple("StructStat", tuple(f[0] for f in SMBC.c_stat_t._fields_))
-StructStatVFS = namedtuple("StructStatVFS", tuple(f[0] for f in SMBC.c_statvfs_t._fields_))
+StructStat = namedtuple("StructStat", tuple(f[0] for f in SMBC.c_stat_t._fields_ if not f[0].startswith("Ṕ")))
+StructStatVFS = namedtuple("StructStatVFS", tuple(f[0] for f in SMBC.c_statvfs_t._fields_ if not f[0].startswith("Ṕ")))
 Dirent = namedtuple("Dirent", ("smbc_type", "dirlen", "comment", "name"))
 FileInfo = namedtuple("FileInfo", tuple(f[0] for f in SMBC.file_info._fields_))
 PrintJobInfo = namedtuple("PrintJobInfo", tuple(f[0] for f in SMBC.print_job_info._fields_))
@@ -855,7 +855,12 @@ class Context :
             raise SMBError("statting file")
         #end if
         return \
-            StructStat(*(getattr(info, f[0]) for f in SMBC.c_stat_t._fields_))
+            StructStat \
+              (*(
+                getattr(info, f[0])
+                for f in SMBC.c_stat_t._fields_
+                if not f[0].startswith("Ṕ"))
+              )
     #end stat
 
     def statvfs(self, fname) :
@@ -865,7 +870,12 @@ class Context :
             raise SMBError("statting VFS")
         #end if
         return \
-            StructStatVFS(*(getattr(info, f[0]) for f in SMBC.c_statvfs_t._fields_))
+            StructStatVFS \
+              (
+                *(getattr(info, f[0])
+                for f in SMBC.c_statvfs_t._fields_
+                if not f[0].startswith("Ṕ"))
+              )
     #end statvfs
 
     def mkdir(self, fname, mode) :
