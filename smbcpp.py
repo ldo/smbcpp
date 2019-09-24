@@ -15,7 +15,7 @@ from collections import \
 import enum
 import atexit
 
-smbc = ct.cdll.LoadLibrary("libsmbclient.so.0.5.0")
+smbc = ct.CDLL("libsmbclient.so.0.5.0", use_errno = True)
 
 class SMBC :
     "useful definitions adapted from libsmbclient.h. You will need to use the" \
