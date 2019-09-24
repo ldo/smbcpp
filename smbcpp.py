@@ -617,8 +617,10 @@ class FBytes :
     def value(self, val) :
         if isinstance(val, bytes) :
             pass
-        elif isinstance(val, (bytearray, ct.c_char_p)) or isinstance(val, array.array) and val.typecode == "B" :
+        elif isinstance(val, bytearray) or isinstance(val, array.array) and val.typecode == "B" :
             val = bytes(val)
+        elif isinstance(val, ct.POINTER(ct.c_char)) :
+            val = ct.cast(val, ct.c_char_p).value
         else :
             raise TypeError("val must be a bytes, bytearray or array.array of bytes")
         #end if
@@ -631,11 +633,17 @@ class FBytes :
         self._val = val + b"\0"
     #end value
 
-    def store(self, buf, max) :
+    def store(self, dst, max) :
         assert max == self.max
-        dest = (self.max * ct.c_char).from_buffer(b)
-        dest.value = self._val
+        typ = len(self._val) * ct.c_char
+        dest = ct.cast(dst, ct.POINTER(typ))
+        dest.contents = typ(*tuple(c for c in self._val))
     #end store
+
+    def __repr__(self) :
+        return \
+            "FBytes[%d](%s)" % (self.max, repr(self._val))
+    #end __repr__
 
 #end FBytes
 
@@ -1119,6 +1127,7 @@ def def_context_extra(Context) :
             un = FBytes(c_un, unlen)
             pw = FBytes(c_pw, pwlen)
             fn(bytes(c_srv), bytes(c_shr), wg, un, pw)
+            print("auth returned wg = %s, un = %s, pw = %s" % (repr(wg), repr(un), repr(pw))) # debug
             wg.store(c_wg, wglen)
             un.store(c_un, unlen)
             pw.store(c_pw, pwlen)
