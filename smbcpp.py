@@ -675,6 +675,11 @@ def decode_bytes0(b, decode) :
         b
 #end decode_bytes0
 
+def decode_timespec(t) :
+    return \
+        t.tv_sec * THOUSAND * MILLION + t.tv_nsec
+#end decode_timespec
+
 def decode_dirent(adr) :
     de = ct.cast(adr, ct.POINTER(SMBC.dirent)).contents
     comment = bytes(ct.cast(de.comment, ct.POINTER(de.commentlen * ct.c_char)).contents)
@@ -857,7 +862,7 @@ class Context :
         return \
             StructStat \
               (*(
-                getattr(info, f[0])
+                (lambda x : x, decode_timespec)[f[0].endswith("tim")](getattr(info, f[0]))
                 for f in SMBC.c_stat_t._fields_
                 if not f[0].startswith("Ṕ"))
               )
