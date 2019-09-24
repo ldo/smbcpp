@@ -678,8 +678,8 @@ def decode_bytes0(b, decode) :
 def decode_dirent(adr) :
     de = ct.cast(adr, ct.POINTER(SMBC.dirent)).contents
     comment = bytes(ct.cast(de.comment, ct.POINTER(de.commentlen * ct.c_char)).contents)
-    name = bytes(ct.cast(adr.value + 28, ct.POINTER(de.namelen * ct.c_char)).contents)
-      # 28 instead of 32 to exclude padding on end of dirent struct
+    name = bytes(ct.cast(adr.value + ct.sizeof(SMBC.dirent) - {4 : 0, 8 : 4}[ct.sizeof(ct.c_void_p)], ct.POINTER(de.namelen * ct.c_char)).contents)
+      # subtract padding on end of dirent struct
     return \
         Dirent \
           (
