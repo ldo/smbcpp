@@ -1126,11 +1126,9 @@ def def_context_extra(Context) :
             un = FBytes(c_un, unlen)
             pw = FBytes(c_pw, pwlen)
             fn(bytes(c_srv), bytes(c_shr), wg, un, pw)
-            print("auth returned wg = %s, un = %s, pw = %s" % (repr(wg), repr(un), repr(pw))) # debug
             wg.store(c_wg, wglen)
             un.store(c_un, unlen)
             pw.store(c_pw, pwlen)
-            print("stored: wg = %s, un = %s, pw = %s" % (repr(c_wg.contents), repr(c_un.contents), repr(ct.cast(c_pw, ct.POINTER(ct.c_char * pwlen)).contents.value))) # debug
         #end wrap_auth_data_fn
 
     #begin def_wrap_auth_data_fn
