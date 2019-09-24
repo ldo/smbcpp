@@ -677,7 +677,7 @@ def decode_bytes0(b, decode) :
 
 def decode_timespec(t) :
     return \
-        t.tv_sec * THOUSAND * MILLION + t.tv_nsec
+        t.tv_sec * BILLION + t.tv_nsec
 #end decode_timespec
 
 def decode_dirent(adr) :
