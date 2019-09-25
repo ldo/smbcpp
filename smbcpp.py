@@ -16,7 +16,7 @@ from collections import \
 import enum
 import atexit
 
-smbc = ct.CDLL("libsmbclient.so.0.5.0", use_errno = True)
+smbc = ct.cdll.LoadLibrary("libsmbclient.so.0.5.0")
 
 class SMBC :
     "useful definitions adapted from libsmbclient.h. You will need to use the" \
@@ -293,31 +293,31 @@ class SMBC :
     NOTIFY_CHANGE_STREAM_SIZE = 0x400
     NOTIFY_CHANGE_STREAM_WRITE = 0x800
 
-    open_fn = ct.CFUNCTYPE(FILEptr, CTXptr, ct.c_char_p, ct.c_int, c_mode_t)
-    creat_fn = ct.CFUNCTYPE(FILEptr, CTXptr, ct.c_char_p, ct.c_int)
-    read_fn = ct.CFUNCTYPE(ct.c_ssize_t, CTXptr, FILEptr, ct.c_void_p, ct.c_size_t)
-    write_fn = ct.CFUNCTYPE(ct.c_ssize_t, CTXptr, FILEptr, ct.c_void_p, ct.c_size_t)
-    splice_cb_fn = ct.CFUNCTYPE(ct.c_int, c_off_t, ct.c_void_p)
-    splice_fn = ct.CFUNCTYPE(c_off_t, CTXptr, FILEptr, FILEptr, c_off_t, splice_cb_fn, ct.c_void_p)
-    unlink_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p)
-    rename_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, CTXptr, ct.c_char_p)
-    lseek_fn = ct.CFUNCTYPE(c_off_t, CTXptr, FILEptr, c_off_t, ct.c_int)
-    stat_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.POINTER(c_stat_t))
-    fstat_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr, ct.POINTER(c_stat_t))
-    statvfs_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.POINTER(c_statvfs_t))
-    fstatvfs_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr, ct.POINTER(c_statvfs_t))
-    ftruncate_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr, c_off_t)
-    close_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr)
-    opendir_fn = ct.CFUNCTYPE(FILEptr, CTXptr, ct.c_char_p)
-    closedir_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr)
-    readdir_fn = ct.CFUNCTYPE(ct.POINTER(dirent), CTXptr, FILEptr)
-    readdirplus_fn = ct.CFUNCTYPE(ct.POINTER(file_info), CTXptr, FILEptr)
-    getdents_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr, ct.POINTER(dirent), ct.c_int)
-    mkdir_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, c_mode_t)
-    rmdir_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p)
-    telldir_fn = ct.CFUNCTYPE(c_off_t, CTXptr, FILEptr)
-    lseekdir_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, c_off_t)
-    fstatdir_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr, ct.POINTER(c_stat_t))
+    open_fn = ct.CFUNCTYPE(FILEptr, CTXptr, ct.c_char_p, ct.c_int, c_mode_t, use_errno = True)
+    creat_fn = ct.CFUNCTYPE(FILEptr, CTXptr, ct.c_char_p, ct.c_int, use_errno = True)
+    read_fn = ct.CFUNCTYPE(ct.c_ssize_t, CTXptr, FILEptr, ct.c_void_p, ct.c_size_t, use_errno = True)
+    write_fn = ct.CFUNCTYPE(ct.c_ssize_t, CTXptr, FILEptr, ct.c_void_p, ct.c_size_t, use_errno = True)
+    splice_cb_fn = ct.CFUNCTYPE(ct.c_int, c_off_t, ct.c_void_p, use_errno = True)
+    splice_fn = ct.CFUNCTYPE(c_off_t, CTXptr, FILEptr, FILEptr, c_off_t, splice_cb_fn, ct.c_void_p, use_errno = True)
+    unlink_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, use_errno = True)
+    rename_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, CTXptr, ct.c_char_p, use_errno = True)
+    lseek_fn = ct.CFUNCTYPE(c_off_t, CTXptr, FILEptr, c_off_t, ct.c_int, use_errno = True)
+    stat_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.POINTER(c_stat_t), use_errno = True)
+    fstat_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr, ct.POINTER(c_stat_t), use_errno = True)
+    statvfs_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.POINTER(c_statvfs_t), use_errno = True)
+    fstatvfs_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr, ct.POINTER(c_statvfs_t), use_errno = True)
+    ftruncate_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr, c_off_t, use_errno = True)
+    close_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr, use_errno = True)
+    opendir_fn = ct.CFUNCTYPE(FILEptr, CTXptr, ct.c_char_p, use_errno = True)
+    closedir_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr, use_errno = True)
+    readdir_fn = ct.CFUNCTYPE(ct.POINTER(dirent), CTXptr, FILEptr, use_errno = True)
+    readdirplus_fn = ct.CFUNCTYPE(ct.POINTER(file_info), CTXptr, FILEptr, use_errno = True)
+    getdents_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr, ct.POINTER(dirent), ct.c_int, use_errno = True)
+    mkdir_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, c_mode_t, use_errno = True)
+    rmdir_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, use_errno = True)
+    telldir_fn = ct.CFUNCTYPE(c_off_t, CTXptr, FILEptr, use_errno = True)
+    lseekdir_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, c_off_t, use_errno = True)
+    fstatdir_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr, ct.POINTER(c_stat_t), use_errno = True)
 
     NOTIFY_ACTION_ADDED = 1
     NOTIFY_ACTION_REMOVED = 2
@@ -337,17 +337,17 @@ class SMBC :
     #end notify_callback_action
 
     notify_callback_fn = ct.CFUNCTYPE(ct.c_int, ct.POINTER(notify_callback_action), ct.c_size_t, ct.c_void_p)
-    notify_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr, bool, ct.c_uint, ct.c_uint, notify_callback_fn, ct.c_void_p)
-    chmod_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, c_mode_t)
-    utimes_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.POINTER(c_utimbuf_t))
-    setxattr_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_char_p, ct.c_void_p, ct.c_size_t, ct.c_int)
-    getxattr_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_char_p, ct.c_void_p, ct.c_size_t)
-    removexattr_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_char_p)
-    listxattr_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_char_p, ct.c_size_t)
-    print_file_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, CTXptr, ct.c_char_p)
-    open_print_job_fn = ct.CFUNCTYPE(FILEptr, CTXptr, ct.c_char_p)
-    list_print_jobs_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, list_print_job_fn)
-    unlink_print_job_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_int)
+    notify_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, FILEptr, bool, ct.c_uint, ct.c_uint, notify_callback_fn, ct.c_void_p, use_errno = True)
+    chmod_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, c_mode_t, use_errno = True)
+    utimes_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.POINTER(c_utimbuf_t), use_errno = True)
+    setxattr_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_char_p, ct.c_void_p, ct.c_size_t, ct.c_int, use_errno = True)
+    getxattr_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_char_p, ct.c_void_p, ct.c_size_t, use_errno = True)
+    removexattr_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_char_p, use_errno = True)
+    listxattr_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_char_p, ct.c_size_t, use_errno = True)
+    print_file_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, CTXptr, ct.c_char_p, use_errno = True)
+    open_print_job_fn = ct.CFUNCTYPE(FILEptr, CTXptr, ct.c_char_p, use_errno = True)
+    list_print_jobs_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, list_print_job_fn, use_errno = True)
+    unlink_print_job_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_int, use_errno = True)
 
     # mutex functions
     create_mutex_fn = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.POINTER(ct.c_void_p), ct.c_char_p)
