@@ -1511,12 +1511,12 @@ class File(GenericFile) :
             #end if
         #end while
         return \
-            data.to_bytes()[:offset]
+            data.tobytes()[:offset]
     #end read
 
     def write(self, data) :
         if isinstance(data, bytes) :
-            srcadr = ct.cast(data, ct.c_void_p).data
+            srcadr = ct.cast(data, ct.c_void_p).value
         elif isinstance(data, bytearray) or isinstance(data, array.array) and data.typecode == "B" :
             srcadr = ct.addressof((ct.c_ubyte * 0).from_buffer(data))
         else :
@@ -1574,7 +1574,12 @@ class File(GenericFile) :
             raise SMBError("statting file")
         #end if
         return \
-            StructStat(*(getattr(info, f[0]) for f in SMBC.c_stat_t._fields_))
+            StructStat \
+              (*(
+                (lambda x : x, decode_timespec)[f[0].endswith("tim")](getattr(info, f[0]))
+                for f in SMBC.c_stat_t._fields_
+                if not f[0].startswith("Ṕ")
+              ))
     #end fstat
 
     def fstatvfs(self) :
@@ -1584,7 +1589,12 @@ class File(GenericFile) :
             raise SMBError("statting VFS")
         #end if
         return \
-            StructStatVFS(*(getattr(info, f[0]) for f in SMBC.c_statvfs_t._fields_))
+            StructStatVFS \
+              (*(
+                getattr(info, f[0])
+                for f in SMBC.c_statvfs_t._fields_
+                if not f[0].startswith("Ṕ")
+              ))
     #end fstatvfs
 
     def ftruncate(self, offset) :
