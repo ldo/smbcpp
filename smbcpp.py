@@ -371,6 +371,13 @@ THOUSAND = 1000
 MILLION = THOUSAND * THOUSAND
 BILLION = THOUSAND * MILLION
 
+def _wderef(wself, parent_name) :
+    self = wself()
+    assert self != None, "parent %s has gone away" % parent_name
+    return \
+        self
+#end _wderef
+
 #+
 # Routine arg/result types
 #-
@@ -705,6 +712,7 @@ class Context :
         ( # to forestall typos
             "_smbobj",
             "decode_bytes",
+            "simple_auth",
             "__weakref__",
             "_function_auth_data",
             "_function_auth_data_with_context",
@@ -716,12 +724,132 @@ class Context :
 
     _instances = WeakValueDictionary()
 
+    class SimpleAuthEntry :
+        "a simple table-driven mechanism for managing authentication information," \
+        " as an alternative to specifying your own general callback. Keys in" \
+        " the dict are («server» «share»), («server», None) or (None, None) tuples," \
+        " and entries are («workgroup», «username», «password») tuples, where any of" \
+        " the components can be None. A key of («server», None), if defined, is used as" \
+        " a fallback if there is no specific entry for a particular («server», «share»)," \
+        " while (None, None) will be used as a final fallback if specified and there is" \
+        " no entry or fallback for a particular («server», «whatever»)."
+
+        def __init__(self, parent) :
+            self._entries = {}
+            self._w_parent = weak_ref(parent)
+        #end __init__
+
+        @staticmethod
+        def validate_key(key) :
+            valid = True # to begin with
+            if key == None :
+                key = (None, None)
+            elif isinstance(key, (bytes, bytearray, str)) :
+                key = (encode_str0(key)[:-1], None)
+            elif isinstance(key, tuple) and len(key) == 2 :
+                if (
+                        isinstance(key[0], (bytes, bytearray, str))
+                    and
+                        (key[1] == None or isinstance(key[1], (bytes, bytearray, str)))
+                ) :
+                    key = \
+                        (
+                            encode_str0(key[0])[:-1],
+                            (lambda : None, lambda : encode_str0(key[1])[:-1])[key[1] != None]()
+                        )
+                elif key != (None, None) :
+                    valid = False
+                #end if
+            else :
+                valid = False
+            #end if
+            if not valid :
+                raise TypeError \
+                  (
+                    "key for SimpleAuthEntry must be bytes/str/None or 2-tuple"
+                    " (bytes/str, bytes/str/None) or (None, None)"
+                  )
+            #end if
+            return \
+                key
+        #end validate_key
+
+        def __getitem__(self, key) :
+            key = self.validate_key(key)
+            if key in self._entries :
+                result = self._entries[key]
+            elif key[1] != None and (key[0], None) in self._entries :
+                result = self._entries[key[0], None]
+            elif key[0] != None and (None, None) in self._entries :
+                result = self._entries[None, None]
+            else :
+                raise KeyError("no auth entry found matching key %s" % repr(key))
+            #end if
+            return \
+                result
+        #end __getitem__
+
+        def __setitem__(self, key, value) :
+            parent = _wderef(self._w_parent, "Context")
+            key = self.validate_key(key)
+            if (
+                    not isinstance(value, tuple)
+                or
+                    len(value) != 3
+                or
+                    not all(isinstance(e, (bytes, bytearray, str, type(None))) for e in value)
+            ) :
+                raise TypeError("auth entry value must be 3-tuple of bytes/str")
+            #end if
+            value = tuple((lambda : None, lambda : encode_str0(v)[:-1])[v != None]() for v in value)
+            self._entries[key] = value
+            parent.function_auth_data = self.do_auth
+        #end __setitem__
+
+        def __contains__(self, key) :
+            key = self.validate_key(key)
+            return \
+                self._entries.__contains__(key)
+        #end __contains__
+
+        def __delitem__(self, key) :
+            key = self.validate_key(key)
+            self._entries.__delitem__(key)
+        #end __delitem__
+
+        def __len__(self) :
+            return \
+                self._entries.__len__()
+        #end __len__
+
+        def __repr__(self) :
+            return \
+                self._entries.__repr__()
+        #end __repr__
+
+        def do_auth(self, server, share, workgroup, username, password) :
+            parent = _wderef(self._w_parent, "Context")
+            use_workgroup, use_username, use_password = self[server, share]
+            if use_workgroup != None :
+                workgroup.value = use_workgroup
+            #end if
+            if use_username != None :
+                username.value = use_username
+            #end if
+            if use_password != None :
+                password.value = use_password
+            #end if
+        #end do_auth
+
+    #end SimpleAuthEntry
+
     def __new__(celf, _smbobj) :
         self = celf._instances.get(_smbobj)
         if self == None :
             self = super().__new__(celf)
             self._smbobj = _smbobj
             self.decode_bytes = True
+            self.simple_auth = celf.SimpleAuthEntry(self)
             self._wrap_function_auth_data = None
             self._wrap_function_auth_data_with_context = None
             self._function_auth_data = None
@@ -1560,8 +1688,7 @@ class Dir(GenericFile) :
 
         @SMBC.notify_callback_fn
         def c_notifier(c_actions, nr_actions, _) :
-            self = w_self()
-            assert self != None, "parent Dir has gone away"
+            self = _wderef(w_self, "Dir")
             actions = []
             for i in range(nr_actions) :
                 item = c_actions[i]
