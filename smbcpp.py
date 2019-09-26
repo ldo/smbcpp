@@ -1211,7 +1211,7 @@ def def_context_extra(Context) :
 
     #begin def_bool_method
         prop_getter.__name__= name
-        prop_getter.__doc__ = "returns the current %s setting." % funcname
+        prop_getter.__doc__ = "the current %s setting." % funcname
         prop_setter.__name__= name
         setter.__name__= setter_name
         setter.__doc__ = \
@@ -1249,7 +1249,7 @@ def def_context_extra(Context) :
 
     #begin def_str_method
         prop_getter.__name__= name
-        prop_getter.__doc__ = "returns the current %s setting." % funcname
+        prop_getter.__doc__ = "the current %s setting." % funcname
         prop_setter.__name__= name
         setter.__name__= setter_name
         setter.__doc__ = \
