@@ -1457,7 +1457,7 @@ class GenericFile :
 
     def close(self) :
         if self._smbobj != None :
-            getattr(smbc, "smbc_get" + self._closename)(self._smbobj)
+            getattr(smbc, "smbc_get" + self._closename)(self.parent._smbobj)(self.parent._smbobj, self._smbobj)
         #end if
         self._smbobj = None
     #end close
