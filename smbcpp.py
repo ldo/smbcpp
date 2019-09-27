@@ -1813,9 +1813,13 @@ def version(decode = True) :
         decode_bytes0(smbc.smbc_version(), decode)
 #end version
 
-def thread_posix() :
-    smbc.smbc_thread_posix()
-#end thread_posix
+if hasattr(smbc, "smbc_thread_posix") :
+
+    def thread_posix() :
+        smbc.smbc_thread_posix()
+    #end thread_posix
+
+#end if
 
 #+
 # Overall
