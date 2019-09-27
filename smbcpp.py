@@ -722,7 +722,15 @@ def decode_dirent(adr) :
 
 class Context :
     "a libsmbclient context. Do not instantiate directly; use the create or" \
-    " get/set_current methods."
+    " get/set_current methods. Not sure if this is documented anywhere, but" \
+    " filespecs to libsmbclient take the form of URLs as follows:\n" \
+    "\n" \
+    "    smb://«server-name»/«share-name»/«path»\n" \
+    "\n" \
+    "where «server-name» is the DNS name or IP address of the server, «share-name»" \
+    " is the name of the share, and «path» is the pathname of the file or" \
+    " directory within the share (empty to reference the root directory of the share)." \
+    " «server-name» and «share-name» cannot contain slashes, but «path» can."
 
     __slots__ = \
         ( # to forestall typos
