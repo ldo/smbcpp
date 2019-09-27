@@ -16,7 +16,7 @@ from collections import \
 import enum
 import atexit
 
-smbc = ct.cdll.LoadLibrary("libsmbclient.so.0.5.0")
+smbc = ct.cdll.LoadLibrary("libsmbclient.so.0")
 
 class SMBC :
     "useful definitions adapted from libsmbclient.h. You will need to use the" \
@@ -384,70 +384,78 @@ def _wderef(wself, parent_name) :
 
 for name, argtype in \
     (
-        ("Debug", ct.c_int),
-        ("NetbiosName", ct.c_char_p),
-        ("Workgroup", ct.c_char_p),
-        ("User", ct.c_char_p),
-        ("Timeout", ct.c_int),
-        ("Port", ct.c_ushort),
-        ("OptionDebugToStderr", SMBC.bool),
-        ("OptionFullTimeNames", SMBC.bool),
-        ("OptionOpenShareMode", SMBC.share_mode),
-        ("OptionUserData", ct.c_void_p),
-        ("OptionSmbEncryptionLevel", SMBC.smb_encrypt_level),
-        ("OptionCaseSensitive", SMBC.bool),
-        ("OptionBrowseMaxLmbCount", ct.c_int),
-        ("OptionUrlEncodeReaddirEntries", SMBC.bool),
-        ("OptionOneSharePerServer", SMBC.bool),
-        ("OptionUseKerberos", SMBC.bool),
-        ("OptionFallbackAfterKerberos", SMBC.bool),
-        ("OptionNoAutoAnonymousLogin", SMBC.bool),
-        ("OptionUseCCache", SMBC.bool),
-        ("OptionUseNTHash", SMBC.bool),
-        ("FunctionAuthData", SMBC.get_auth_data_fn),
-        ("FunctionAuthDataWithContext", SMBC.get_auth_data_with_context_fn),
-        ("FunctionCheckServer", SMBC.check_server_fn),
-        ("FunctionRemoveUnusedServer", SMBC.remove_unused_server_fn),
-        ("FunctionAddCachedServer", SMBC.add_cached_srv_fn),
-        ("FunctionGetCachedServer", SMBC.get_cached_srv_fn),
-        ("FunctionRemoveCachedServer", SMBC.remove_cached_srv_fn),
-        ("FunctionPurgeCachedServers", SMBC.purge_cached_fn),
-        ("ServerCacheData", ct.c_void_p),
-        ("FunctionOpen", SMBC.open_fn),
-        ("FunctionCreat", SMBC.creat_fn),
-        ("FunctionRead", SMBC.read_fn),
-        ("FunctionWrite", SMBC.write_fn),
-        ("FunctionSplice", SMBC.splice_fn),
-        ("FunctionUnlink", SMBC.unlink_fn),
-        ("FunctionRename", SMBC.rename_fn),
-        ("FunctionLseek", SMBC.lseek_fn),
-        ("FunctionStat", SMBC.stat_fn),
-        ("FunctionFstat", SMBC.fstat_fn),
-        ("FunctionStatVFS", SMBC.statvfs_fn),
-        ("FunctionFstatVFS", SMBC.fstatvfs_fn),
-        ("FunctionFtruncate", SMBC.ftruncate_fn),
-        ("FunctionClose", SMBC.close_fn),
-        ("FunctionOpendir", SMBC.opendir_fn),
-        ("FunctionClosedir", SMBC.closedir_fn),
-        ("FunctionReaddir", SMBC.readdir_fn),
-        ("FunctionReaddirPlus", SMBC.readdirplus_fn),
-        ("FunctionGetdents", SMBC.getdents_fn),
-        ("FunctionMkdir", SMBC.mkdir_fn),
-        ("FunctionRmdir", SMBC.rmdir_fn),
-        ("FunctionTelldir", SMBC.telldir_fn),
-        ("FunctionLseekdir", SMBC.lseekdir_fn),
-        ("FunctionFstatdir", SMBC.fstatdir_fn),
-        ("FunctionNotify", SMBC.notify_fn),
-        ("FunctionChmod", SMBC.chmod_fn),
-        ("FunctionUtimes", SMBC.utimes_fn),
-        ("FunctionSetxattr", SMBC.setxattr_fn),
-        ("FunctionGetxattr", SMBC.getxattr_fn),
-        ("FunctionRemovexattr", SMBC.removexattr_fn),
-        ("FunctionListxattr", SMBC.listxattr_fn),
-        ("FunctionPrintFile", SMBC.print_file_fn),
-        ("FunctionOpenPrintJob", SMBC.open_print_job_fn),
-        ("FunctionListPrintJobs", SMBC.list_print_jobs_fn),
-        ("FunctionUnlinkPrintJob", SMBC.unlink_print_job_fn),
+        (
+            ("Debug", ct.c_int),
+            ("NetbiosName", ct.c_char_p),
+            ("Workgroup", ct.c_char_p),
+            ("User", ct.c_char_p),
+            ("Timeout", ct.c_int),
+            ("Port", ct.c_ushort),
+            ("OptionDebugToStderr", SMBC.bool),
+            ("OptionFullTimeNames", SMBC.bool),
+            ("OptionOpenShareMode", SMBC.share_mode),
+            ("OptionUserData", ct.c_void_p),
+            ("OptionSmbEncryptionLevel", SMBC.smb_encrypt_level),
+            ("OptionCaseSensitive", SMBC.bool),
+            ("OptionBrowseMaxLmbCount", ct.c_int),
+            ("OptionUrlEncodeReaddirEntries", SMBC.bool),
+            ("OptionOneSharePerServer", SMBC.bool),
+            ("OptionUseKerberos", SMBC.bool),
+            ("OptionFallbackAfterKerberos", SMBC.bool),
+            ("OptionNoAutoAnonymousLogin", SMBC.bool),
+            ("OptionUseCCache", SMBC.bool),
+            ("OptionUseNTHash", SMBC.bool),
+            ("FunctionAuthData", SMBC.get_auth_data_fn),
+            ("FunctionAuthDataWithContext", SMBC.get_auth_data_with_context_fn),
+            ("FunctionCheckServer", SMBC.check_server_fn),
+            ("FunctionRemoveUnusedServer", SMBC.remove_unused_server_fn),
+            ("FunctionAddCachedServer", SMBC.add_cached_srv_fn),
+            ("FunctionGetCachedServer", SMBC.get_cached_srv_fn),
+            ("FunctionRemoveCachedServer", SMBC.remove_cached_srv_fn),
+            ("FunctionPurgeCachedServers", SMBC.purge_cached_fn),
+            ("ServerCacheData", ct.c_void_p),
+            ("FunctionOpen", SMBC.open_fn),
+            ("FunctionCreat", SMBC.creat_fn),
+            ("FunctionRead", SMBC.read_fn),
+            ("FunctionWrite", SMBC.write_fn),
+            ("FunctionSplice", SMBC.splice_fn),
+            ("FunctionUnlink", SMBC.unlink_fn),
+            ("FunctionRename", SMBC.rename_fn),
+            ("FunctionLseek", SMBC.lseek_fn),
+            ("FunctionStat", SMBC.stat_fn),
+            ("FunctionFstat", SMBC.fstat_fn),
+            ("FunctionStatVFS", SMBC.statvfs_fn),
+            ("FunctionFstatVFS", SMBC.fstatvfs_fn),
+            ("FunctionFtruncate", SMBC.ftruncate_fn),
+            ("FunctionClose", SMBC.close_fn),
+            ("FunctionOpendir", SMBC.opendir_fn),
+            ("FunctionClosedir", SMBC.closedir_fn),
+            ("FunctionReaddir", SMBC.readdir_fn),
+            ("FunctionGetdents", SMBC.getdents_fn),
+            ("FunctionMkdir", SMBC.mkdir_fn),
+            ("FunctionRmdir", SMBC.rmdir_fn),
+            ("FunctionTelldir", SMBC.telldir_fn),
+            ("FunctionLseekdir", SMBC.lseekdir_fn),
+            ("FunctionFstatdir", SMBC.fstatdir_fn),
+            ("FunctionNotify", SMBC.notify_fn),
+            ("FunctionChmod", SMBC.chmod_fn),
+            ("FunctionUtimes", SMBC.utimes_fn),
+            ("FunctionSetxattr", SMBC.setxattr_fn),
+            ("FunctionGetxattr", SMBC.getxattr_fn),
+            ("FunctionRemovexattr", SMBC.removexattr_fn),
+            ("FunctionListxattr", SMBC.listxattr_fn),
+            ("FunctionPrintFile", SMBC.print_file_fn),
+            ("FunctionOpenPrintJob", SMBC.open_print_job_fn),
+            ("FunctionListPrintJobs", SMBC.list_print_jobs_fn),
+            ("FunctionUnlinkPrintJob", SMBC.unlink_print_job_fn),
+        )
+    +
+        (
+            (),
+            (
+                ("FunctionReaddirPlus", SMBC.readdirplus_fn),
+            ),
+        )[hasattr(smbc, "smbc_readdirplus")]
     ) \
 :
     func = getattr(smbc, "smbc_get" + name)
@@ -459,12 +467,18 @@ for name, argtype in \
 #end for
 del name, argtype, func
 
-smbc.smbc_setLogCallback.restype = None
-smbc.smbc_setLogCallback.argtypes = (SMBC.CTXptr, ct.c_void_p, SMBC.debug_callback_fn)
-smbc.smbc_setConfiguration.restype = ct.c_int
-smbc.smbc_setConfiguration.argtypes = (SMBC.CTXptr, ct.c_char_p)
-smbc.smbc_setOptionProtocols.restype = SMBC.bool
-smbc.smbc_setOptionProtocols.argtypes = (SMBC.CTXptr, ct.c_char_p, ct.c_char_p)
+if hasattr(smbc, "smbc_setLogCallback") :
+    smbc.smbc_setLogCallback.restype = None
+    smbc.smbc_setLogCallback.argtypes = (SMBC.CTXptr, ct.c_void_p, SMBC.debug_callback_fn)
+#end if
+if hasattr(smbc, "smbc_setConfiguration") :
+    smbc.smbc_setConfiguration.restype = ct.c_int
+    smbc.smbc_setConfiguration.argtypes = (SMBC.CTXptr, ct.c_char_p)
+#end if
+if hasattr(smbc, "smbc_setOptionProtocols") :
+    smbc.smbc_setOptionProtocols.restype = SMBC.bool
+    smbc.smbc_setOptionProtocols.argtypes = (SMBC.CTXptr, ct.c_char_p, ct.c_char_p)
+#end if
 
 smbc.smbc_new_context.restype = SMBC.CTXptr
 smbc.smbc_new_context.argtypes = ()
@@ -503,8 +517,10 @@ smbc.smbc_getdents.restype = ct.c_int
 smbc.smbc_getdents.argtypes = (ct.c_uint, ct.POINTER(SMBC.dirent), ct.c_int)
 smbc.smbc_readdir.restype = ct.POINTER(SMBC.dirent)
 smbc.smbc_readdir.argtypes = (ct.c_uint,)
-smbc.smbc_readdirplus.restype = ct.POINTER(SMBC.file_info)
-smbc.smbc_readdirplus.argtypes = (ct.c_uint,)
+if hasattr(smbc, "smbc_readdirplus") :
+    smbc.smbc_readdirplus.restype = ct.POINTER(SMBC.file_info)
+    smbc.smbc_readdirplus.argtypes = (ct.c_uint,)
+#end if
 smbc.smbc_telldir.restype = SMBC.c_off_t
 smbc.smbc_telldir.argtypes = (ct.c_int,)
 smbc.smbc_lseekdir.restype = ct.c_int
@@ -1696,22 +1712,26 @@ class Dir(GenericFile) :
             result
     #end readdir
 
-    def readdirplus(self) :
-        result = ct.cast(smbc.smbc_getFunctionReaddirPlus(self.parent._smbobj)(self.parent._smbobj, self._smbobj), ct.c_void_p)
-        if result.value == None :
-            result = None
-        else :
-            info = ct.cast(result, ct.POINTER(SMBC.file_info)).contents
-            result = \
-            FileInfo \
-              (*(
-                (lambda x : x, decode_timespec)[f[0].endswith("time_ts")](getattr(info, f[0]))
-                for f in SMBC.file_info._fields_
-              ))
-        #end if
-        return \
-            result
-    #end readdirplus
+    if hasattr(smbc, "smbc_readdirplus") :
+
+        def readdirplus(self) :
+            result = ct.cast(smbc.smbc_getFunctionReaddirPlus(self.parent._smbobj)(self.parent._smbobj, self._smbobj), ct.c_void_p)
+            if result.value == None :
+                result = None
+            else :
+                info = ct.cast(result, ct.POINTER(SMBC.file_info)).contents
+                result = \
+                FileInfo \
+                  (*(
+                    (lambda x : x, decode_timespec)[f[0].endswith("time_ts")](getattr(info, f[0]))
+                    for f in SMBC.file_info._fields_
+                  ))
+            #end if
+            return \
+                result
+        #end readdirplus
+
+    #end if
 
     def telldir(self) :
         result = smbc.smbc_getFunctionTelldir(self.parent._smbobj)(self.parent._smbobj, self._smbobj)
