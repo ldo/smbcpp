@@ -343,7 +343,7 @@ class SMBC :
     setxattr_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_char_p, ct.c_void_p, ct.c_size_t, ct.c_int, use_errno = True)
     getxattr_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_char_p, ct.c_void_p, ct.c_size_t, use_errno = True)
     removexattr_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_char_p, use_errno = True)
-    listxattr_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_char_p, ct.c_size_t, use_errno = True)
+    listxattr_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, ct.c_void_p, ct.c_size_t, use_errno = True)
     print_file_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, CTXptr, ct.c_char_p, use_errno = True)
     open_print_job_fn = ct.CFUNCTYPE(FILEptr, CTXptr, ct.c_char_p, use_errno = True)
     list_print_jobs_fn = ct.CFUNCTYPE(ct.c_int, CTXptr, ct.c_char_p, list_print_job_fn, use_errno = True)
@@ -1101,7 +1101,7 @@ class Context :
         #end if
         while True :
             pos = buf.find(0)
-            if pos < 0 :
+            if pos <= 0 : # ignore trailing empty entry
                 break
             yield decode_bytes0(buf[:pos], self.decode_bytes)
             buf = buf[pos + 1:]
