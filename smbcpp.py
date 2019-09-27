@@ -1478,43 +1478,85 @@ class File(GenericFile) :
     #end __new__
 
     def read(self, to_read = None) :
-        func = smbc.smbc_getFunctionRead(self.parent._smbobj)
-        to_read_left = (self.read_at_once, to_read)[to_read != None]
-        data = array.array("B", [0] * to_read_left)
-        offset = 0
-        while True :
-            if to_read_left == 0 :
-                break
-            valueadr = ct.addressof((ct.c_ubyte * 0).from_buffer(data)) + offset
-            nrbytes = func(self.parent._smbobj, self._smbobj, valueadr, to_read_left)
+        "tries to read the specified number of bytes if not None, else" \
+        " reads until EOF. Returns the bytes read."
+        if to_read == None :
+            result = self.readall()
+        else :
+            # do just one underlying read call
+            buf = array.array("B", [0] * to_read)
+            nrbytes = smbc.smbc_getFunctionRead(self.parent._smbobj) \
+                (
+                    self.parent._smbobj, self._smbobj,
+                    ct.addressof((ct.c_ubyte * 0).from_buffer(buf)), to_read
+                )
             if nrbytes < 0 :
                 raise SMBError("reading from file")
+            #end if
+            result = buf.tobytes()[:nrbytes]
+        #end if
+        return \
+            result
+    #end read
+
+    def readall(self) :
+        "reads everything from file until EOF."
+        assert self.read_at_once != 0
+        func = smbc.smbc_getFunctionRead(self.parent._smbobj)
+        to_read = self.read_at_once
+        buf = array.array("B", [0] * to_read)
+        offset = 0
+        while True :
+            if to_read == 0 :
+                break
+            bufadr = ct.addressof((ct.c_ubyte * 0).from_buffer(buf)) + offset
+              # need to keep refetching base address of buffer, because it
+              # might have changed after previous resize (below)
+            nrbytes = func(self.parent._smbobj, self._smbobj, bufadr, to_read)
+            if nrbytes < 0 :
+                raise SMBError("reading from file until EOF (after %d bytes)" % offset)
             #end if
             if nrbytes == 0 :
                 break
             offset += nrbytes
-            to_read_left -= nrbytes
-            if to_read == None :
-                # extend buffer to avoid too-small read requests
-                add_to_read = \
-                    (
-                        (self.read_at_once * 3 // 2 - to_read_left)
-                    //
-                        self.read_at_once
-                    *
-                        self.read_at_once
-                    )
-                if add_to_read > 0 :
-                    data.extend([0] * add_to_read)
-                    to_read_left += add_to_read
-                #end if
+            to_read -= nrbytes
+            # extend buffer to keep some reasonable minimum size for read requests
+            add_to_read = \
+                (
+                    (self.read_at_once * 3 // 2 - to_read)
+                //
+                    self.read_at_once
+                *
+                    self.read_at_once
+                )
+            if add_to_read > 0 :
+                buf.extend([0] * add_to_read)
+                to_read += add_to_read
             #end if
         #end while
         return \
-            data.tobytes()[:offset]
-    #end read
+            buf.tobytes()[:offset]
+    #end readall
+
+    def readinto(self, buf) :
+        "reads into a preallocated writeable bytes-like object, using at most" \
+        " one underlying read call. Returns nr bytes read."
+        to_read = len(buf)
+        nrbytes = smbc.smbc_getFunctionRead(self.parent._smbobj) \
+            (
+                self.parent._smbobj, self._smbobj,
+                ct.addressof((ct.c_ubyte * 0).from_buffer(buf)), to_read
+            )
+        if nrbytes < 0 :
+            raise SMBError("reading from file into %d-byte buf" % to_read)
+        #end if
+        return \
+            nrbytes
+    #end readinto
 
     def write(self, data) :
+        "tries to write the entire contents of the given bytes-like object," \
+        " using at most one underlying write call. Returns nr bytes actually written."
         if isinstance(data, bytes) :
             srcadr = ct.cast(data, ct.c_void_p).value
         elif isinstance(data, bytearray) or isinstance(data, array.array) and data.typecode == "B" :
@@ -1522,18 +1564,13 @@ class File(GenericFile) :
         else :
             raise TypeError("data is not bytes, bytearray or array.array of bytes")
         #end if
-        to_write = len(data)
-        func = smbc.smbc_getFunctionWrite(self.parent._smbobj)
-        while True :
-            if to_write == 0 :
-                break
-            nrbytes = func(self.parent._smbobj, self._smbobj, srcadr, to_write)
-            if nrbytes <= 0 :
-                raise SMBError("writing to file")
-            #end if
-            to_write -= nrbytes
-            srcadr += nrbytes
-        #end while
+        nrbytes = smbc.smbc_getFunctionWrite(self.parent._smbobj) \
+            (self.parent._smbobj, self._smbobj, srcadr, len(data))
+        if nrbytes <= 0 :
+            raise SMBError("writing to file")
+        #end if
+        return \
+            nrbytes
     #end write
 
     def splice(self, other, count, callback) :
