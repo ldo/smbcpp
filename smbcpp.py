@@ -1092,7 +1092,7 @@ class Context :
             raise SMBError("getting value of xattr %s for %s" % (repr(name), repr(fname)))
         #end if
         return \
-            bytes(b)
+            bytes(buf)
     #end getxattr
 
     def removexattr(self, fname, name) :
