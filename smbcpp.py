@@ -1738,9 +1738,7 @@ class Dir(GenericFile) :
 
     def readdir(self) :
         result = ct.cast(smbc.smbc_getFunctionReaddir(self.parent._smbobj)(self.parent._smbobj, self._smbobj), ct.c_void_p).value
-        if result == None :
-            result = None
-        else :
+        if result != None :
             result = _decode_dirent(result)
         #end if
         return \
@@ -1750,11 +1748,9 @@ class Dir(GenericFile) :
     if hasattr(smbc, "smbc_readdirplus") :
 
         def readdirplus(self) :
-            result = ct.cast(smbc.smbc_getFunctionReaddirPlus(self.parent._smbobj)(self.parent._smbobj, self._smbobj), ct.c_void_p)
-            if result.value == None :
-                result = None
-            else :
-                info = ct.cast(result.value, ct.POINTER(SMBC.file_info)).contents
+            result = ct.cast(smbc.smbc_getFunctionReaddirPlus(self.parent._smbobj)(self.parent._smbobj, self._smbobj), ct.c_void_p).value
+            if result != None :
+                info = ct.cast(result, ct.POINTER(SMBC.file_info)).contents
                 result = \
                     FileInfo \
                       (*(
