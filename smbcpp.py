@@ -364,7 +364,7 @@ class SMBC :
 
 StructStat = namedtuple("StructStat", tuple(f[0] for f in SMBC.c_stat_t._fields_ if not f[0].startswith("Ṕ")))
 StructStatVFS = namedtuple("StructStatVFS", tuple(f[0] for f in SMBC.c_statvfs_t._fields_ if not f[0].startswith("Ṕ")))
-Dirent = namedtuple("Dirent", ("smbc_type", "dirlen", "comment", "name"))
+Dirent = namedtuple("Dirent", ("smbc_type", "comment", "name"))
 FileInfo = namedtuple("FileInfo", tuple(f[0] for f in SMBC.file_info._fields_))
 PrintJobInfo = namedtuple("PrintJobInfo", tuple(f[0] for f in SMBC.print_job_info._fields_))
 NotifyCallbackAction = namedtuple("NotifyCallbackAction", ("action", "filename"))
@@ -715,14 +715,14 @@ def _decode_dirent(adr) :
         comment = None
     #end if
     name = bytes(ct.cast(adr + SMBC.direntsize, ct.POINTER(de.namelen * ct.c_char)).contents)
+    dirent = Dirent \
+      (
+        smbc_type = de.smbc_type,
+        comment = comment,
+        name = name
+      )
     return \
-        Dirent \
-          (
-            smbc_type = de.smbc_type,
-            dirlen = de.dirlen,
-            comment = comment,
-            name = name
-          )
+        dirent, de.dirlen
 #end _decode_dirent
 
 class Context :
@@ -1713,11 +1713,11 @@ class Dir(GenericFile) :
             while True :
                 if offset == nrbytes :
                     break
-                dirent = _decode_dirent(ct.addressof(buf) + offset)
+                dirent, direntlen = _decode_dirent(ct.addressof(buf) + offset)
                 if dirent.name not in (b".", b"..") :
                     yield dirent
                 #end if
-                offset += dirent.dirlen
+                offset += direntlen
             #end while
             nrbytes = func \
               (
@@ -1739,7 +1739,7 @@ class Dir(GenericFile) :
     def readdir(self) :
         result = ct.cast(smbc.smbc_getFunctionReaddir(self.parent._smbobj)(self.parent._smbobj, self._smbobj), ct.c_void_p).value
         if result != None :
-            result = _decode_dirent(result)
+            result = _decode_dirent(result)[0]
         #end if
         return \
             result
