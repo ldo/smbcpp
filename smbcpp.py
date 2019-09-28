@@ -807,7 +807,7 @@ class Context :
             elif key[0] != None and (None, None) in self._entries :
                 result = self._entries[None, None]
             else :
-                raise KeyError("no auth entry found matching key %s" % repr(key))
+                result = (None, None, None)
             #end if
             return \
                 result
@@ -816,24 +816,29 @@ class Context :
         def __setitem__(self, key, value) :
             parent = _wderef(self._w_parent, "Context")
             key = self.validate_key(key)
-            if (
+            if value == None :
+                value = (None, None, None)
+            elif (
                     not isinstance(value, tuple)
                 or
                     len(value) != 3
                 or
                     not all(isinstance(e, (bytes, bytearray, str, type(None))) for e in value)
             ) :
-                raise TypeError("auth entry value must be 3-tuple of bytes/str")
+                raise TypeError("auth entry value must be 3-tuple of bytes/str/None")
             #end if
-            value = tuple((lambda : None, lambda : encode_str0(v)[:-1])[v != None]() for v in value)
-            self._entries[key] = value
-            parent.function_auth_data = self.do_auth
+            if value != (None, None, None) :
+                value = tuple((lambda : None, lambda : encode_str0(v)[:-1])[v != None]() for v in value)
+                self._entries[key] = value
+                parent.function_auth_data = self.do_auth
+            else :
+                self._entries.pop(key, None)
+            #end if
         #end __setitem__
 
         def __contains__(self, key) :
-            key = self.validate_key(key)
             return \
-                self._entries.__contains__(key)
+                self.__getitem(self.validate_key(key)) != (None, None, None)
         #end __contains__
 
         def __delitem__(self, key) :
@@ -1460,16 +1465,16 @@ class GenericFile :
 
     _instances = WeakValueDictionary()
 
-    def __new__(celf, _smbobj, _parent, _closename) :
+    def __new__(celf, _smbobj, parent, _closename) :
         self = celf._instances.get(_smbobj)
         if self == None :
             self = super().__new__(celf)
             self._smbobj = _smbobj
-            self.parent = _parent
+            self.parent = parent
             self._closename = _closename
             celf._instances[_smbobj] = self
         else :
-            assert self.parent == _parent and self._closename == _closename
+            assert self.parent == parent and self._closename == _closename
         #end if
         return \
             self
