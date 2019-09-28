@@ -1705,8 +1705,6 @@ class Dir(GenericFile) :
         self.lseekdir(0)
         name_extra = 256
         bufsize = ct.sizeof(SMBC.dirent) + name_extra
-        align = ct.sizeof(ct.c_void_p)
-        bufsize = bufsize + align - 1 & - align
         buf = (bufsize * ct.c_ubyte)()
         func = smbc.smbc_getFunctionGetdents(self.parent._smbobj)
         offset = 0
