@@ -189,11 +189,13 @@ class SMBC :
                 ("smbc_type", ct.c_uint),
                 ("dirlen", ct.c_uint),
                 ("commentlen", ct.c_uint),
-                ("comment", ct.POINTER(ct.c_char)),
+                ("comment", ct.c_void_p),
                 ("namelen", ct.c_uint),
                 ("name", ct.c_char * 0),
             ]
     #end dirent
+    direntsize = {4 : 20, 8 : 28}[ct.sizeof(ct.c_void_p)]
+      # exclude padding on end of dirent struct
 
     class file_info(ct.Structure) :
         pass
@@ -705,11 +707,14 @@ def decode_timespec(t) :
         t.tv_sec * BILLION + t.tv_nsec
 #end decode_timespec
 
-def decode_dirent(adr) :
+def _decode_dirent(adr) :
     de = ct.cast(adr, ct.POINTER(SMBC.dirent)).contents
-    comment = bytes(ct.cast(de.comment, ct.POINTER(de.commentlen * ct.c_char)).contents)
-    name = bytes(ct.cast(adr.value + ct.sizeof(SMBC.dirent) - {4 : 0, 8 : 4}[ct.sizeof(ct.c_void_p)], ct.POINTER(de.namelen * ct.c_char)).contents)
-      # subtract padding on end of dirent struct
+    if de.comment != None :
+        comment = bytes(ct.cast(de.comment, ct.POINTER(de.commentlen * ct.c_char)).contents)
+    else :
+        comment = None
+    #end if
+    name = bytes(ct.cast(adr + SMBC.direntsize, ct.POINTER(de.namelen * ct.c_char)).contents)
     return \
         Dirent \
           (
@@ -718,7 +723,7 @@ def decode_dirent(adr) :
             comment = comment,
             name = name
           )
-#end decode_dirent
+#end _decode_dirent
 
 class Context :
     "a libsmbclient context. Do not instantiate directly; use the create or" \
@@ -1699,27 +1704,46 @@ class Dir(GenericFile) :
     def get_all_dents(self) :
         self.lseekdir(0)
         name_extra = 256
-        info_buf = ((ct.sizeof(SMBC.dirent) + name_extra) * ct.c_ubyte)()
-        c_info_ptr = ct.cast(ct.addressof(info_buf), ct.POINTER(SMBC.dirent))
+        bufsize = ct.sizeof(SMBC.dirent) + name_extra
+        align = ct.sizeof(ct.c_void_p)
+        bufsize = bufsize + align - 1 & - align
+        buf = (bufsize * ct.c_ubyte)()
         func = smbc.smbc_getFunctionGetdents(self.parent._smbobj)
+        offset = 0
+        nrbytes = 0
         while True :
-            result = func(self.parent._smbobj, self._smbobj, c_info_ptr, ct.sizeof(info_buf))
-            if result <= 0 :
-                if result < 0 :
+            while True :
+                if offset == nrbytes :
+                    break
+                dirent = _decode_dirent(ct.addressof(buf) + offset)
+                if dirent.name not in (b".", b"..") :
+                    yield dirent
+                #end if
+                offset += dirent.dirlen
+            #end while
+            nrbytes = func \
+              (
+                self.parent._smbobj,
+                self._smbobj,
+                ct.cast(ct.addressof(buf), ct.POINTER(SMBC.dirent)),
+                bufsize
+              )
+            if nrbytes <= 0 :
+                if nrbytes < 0 :
                     raise SMBError("getting directory entries")
                 #end if
                 break
             #end if
-            yield decode_dirent(ct.cast(c_info_ptr, ct.c_void_p))
+            offset = 0
         #end while
     #end get_all_dents
 
     def readdir(self) :
-        result = ct.cast(smbc.smbc_getFunctionReaddir(self.parent._smbobj)(self.parent._smbobj, self._smbobj), ct.c_void_p)
-        if result.value == None :
+        result = ct.cast(smbc.smbc_getFunctionReaddir(self.parent._smbobj)(self.parent._smbobj, self._smbobj), ct.c_void_p).value
+        if result == None :
             result = None
         else :
-            result = decode_dirent(ct.cast(result, ct.c_void_p))
+            result = _decode_dirent(result)
         #end if
         return \
             result
@@ -1732,13 +1756,13 @@ class Dir(GenericFile) :
             if result.value == None :
                 result = None
             else :
-                info = ct.cast(result, ct.POINTER(SMBC.file_info)).contents
+                info = ct.cast(result.value, ct.POINTER(SMBC.file_info)).contents
                 result = \
-                FileInfo \
-                  (*(
-                    (lambda x : x, decode_timespec)[f[0].endswith("time_ts")](getattr(info, f[0]))
-                    for f in SMBC.file_info._fields_
-                  ))
+                    FileInfo \
+                      (*(
+                        (lambda x : x, decode_timespec)[f[0].endswith("time_ts")](getattr(info, f[0]))
+                        for f in SMBC.file_info._fields_
+                      ))
             #end if
             return \
                 result
