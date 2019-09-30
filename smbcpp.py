@@ -1685,18 +1685,10 @@ class Dir(GenericFile) :
     "represents an open libsmbclient directory. Do not instantiate directly;" \
     " get from Context.opendir method."
 
-    __slots__ = \
-        ( # to forestall typos
-            "_notify_action",
-            # need to keep references to ctypes-wrapped functions
-            # so they don't disappear prematurely:
-            "_wrap_notify_action",
-        )
+    __slots__ = () # to forestall typos
 
     def __new__(celf, _smbobj, _parent) :
         self = GenericFile.__new__(celf, _smbobj, _parent, "FunctionClosedir")
-        self._notify_action = None
-        self._wrap_notify_action = None
         return \
             self
     #end __new__
@@ -1782,11 +1774,8 @@ class Dir(GenericFile) :
 
     def notify(self, recursive, filter, timeout, notifier) :
 
-        w_self = weak_ref(self)
-
         @SMBC.notify_callback_fn
         def c_notifier(c_actions, nr_actions, _) :
-            self = _wderef(w_self, "Dir")
             actions = []
             for i in range(nr_actions) :
                 item = c_actions[i]
@@ -1798,11 +1787,6 @@ class Dir(GenericFile) :
             result = notifier(actions)
             if not isinstance(result, int) :
                 raise TypeError("notifier result must be int")
-            #end if
-            if result != 0 :
-                # no more calls expected
-                self._notify_action = None
-                self._wrap_notify_action = None
             #end if
             return \
                 result
@@ -1825,8 +1809,6 @@ class Dir(GenericFile) :
         ) :
             raise SMBError("setting directory notifications")
         #end if
-        self._notify_action = notifier
-        self._wrap_notify_action = c_notifier
     #end notify
 
 #end Dir
