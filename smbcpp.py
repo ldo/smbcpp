@@ -1792,7 +1792,7 @@ class Dir(GenericFile) :
                 item = c_actions[i]
                 actions.append \
                   (
-                    NotifyCallbackAction(action = item.action, filename = item.filename.value)
+                    NotifyCallbackAction(action = item.action, filename = item.filename)
                   )
             #end if
             result = notifier(actions)
