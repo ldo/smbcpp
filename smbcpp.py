@@ -1807,7 +1807,7 @@ class Dir(GenericFile) :
             !=
                 0
         ) :
-            raise SMBError("setting directory notifications")
+            raise SMBError("getting directory notifications")
         #end if
     #end notify
 
