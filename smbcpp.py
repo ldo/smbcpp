@@ -1800,7 +1800,7 @@ class Dir(GenericFile) :
                         self._smbobj,
                         recursive,
                         filter,
-                        round(timeout * 1000),
+                        round(timeout * THOUSAND),
                         c_notifier,
                         None
                     )
