@@ -6,15 +6,19 @@ ctypes."""
 #-
 
 import os
+import time
 import ctypes as ct
 from weakref import \
     ref as weak_ref, \
     WeakValueDictionary
+import threading
 import array
 from collections import \
     namedtuple
+import queue
 import enum
 import atexit
+import asyncio
 
 smbc = ct.cdll.LoadLibrary("libsmbclient.so.0")
 
@@ -196,6 +200,8 @@ class SMBC :
     #end dirent
     direntsize = {4 : 20, 8 : 28}[ct.sizeof(ct.c_void_p)]
       # exclude padding on end of dirent struct
+    dirent_name_extra = 256
+      # sufficient for longest possible pathname component in Linux
 
     class file_info(ct.Structure) :
         pass
@@ -674,6 +680,8 @@ class FBytes :
 
 #end FBytes
 
+_WorkQueueEntry = namedtuple("_WorkQueueEntry", ("func", "args", "done_fute"))
+
 def encode_str0(s) :
     if isinstance(s, str) :
         c_s = s.encode()
@@ -735,14 +743,21 @@ class Context :
     "where «server-name» is the DNS name or IP address of the server, «share-name»" \
     " is the name of the share, and «path» is the pathname of the file or" \
     " directory within the share (empty to reference the root directory of the share)." \
-    " «server-name» and «share-name» cannot contain slashes, but «path» can."
+    " «server-name» and «share-name» cannot contain slashes, but «path» can.\n" \
+    "\n" \
+    "Note on async calls: these are serialized on a single worker thread per Context." \
+    " This is to avoid thread-safeness issues across async calls. Do not mix sync and" \
+    " async calls on the same Context."
 
     __slots__ = \
         ( # to forestall typos
             "_smbobj",
             "decode_bytes",
             "simple_auth",
+            "loop",
             "__weakref__",
+            "_worker_thread",
+            "_work_queue",
             "_function_auth_data",
             "_function_auth_data_with_context",
             # need to keep references to ctypes-wrapped functions
@@ -884,6 +899,9 @@ class Context :
             self._smbobj = _smbobj
             self.decode_bytes = True
             self.simple_auth = celf.SimpleAuthEntry(self)
+            self._worker_thread = None
+            self._work_queue = None
+            self.loop = None
             self._wrap_function_auth_data = None
             self._wrap_function_auth_data_with_context = None
             self._function_auth_data = None
@@ -922,8 +940,78 @@ class Context :
             self
     #end init
 
+    def _process_work_queue(w_self) :
+
+        work_queue = _wderef(w_self, "Context")._work_queue
+
+        def return_result(w_done_fute, result) :
+            done_fute = w_done_fute()
+            if done_fute != None and not done_fute.done() :
+                done_fute.set_result(result)
+            #end if
+        #end return_result
+
+        def return_exception(w_done_fute, fail) :
+            done_fute = w_done_fute()
+            if done_fute != None and not done_fute.done() :
+                done_fute.set_exception(fail)
+            #end if
+        #end return_exception
+
+    #begin _process_work_queue
+        while True :
+            entry = work_queue.get()
+            if entry.func == None :
+                # end-of-work indicator
+                break
+            try :
+                result = entry.func(*entry.args)
+            except Exception as fail :
+                _wderef(w_self, "Context") \
+                    .loop.call_soon_threadsafe(return_exception, weak_ref(entry.done_fute), fail)
+            else :
+                _wderef(w_self, "Context") \
+                    .loop.call_soon_threadsafe(return_result, weak_ref(entry.done_fute), result)
+            #end try
+        #end while
+    #end _process_work_queue
+
+    def enable_async_calls(self, loop = None) :
+        if loop == None :
+            loop = asyncio.get_event_loop()
+        #end if
+        if self._work_queue == None :
+            self.loop = loop
+            self._work_queue = queue.SimpleQueue()
+            self._worker_thread = threading.Thread \
+              (
+                target = type(self)._process_work_queue,
+                args = (weak_ref(self),),
+              )
+            self._worker_thread.start()
+        else :
+            assert self.loop == loop
+        #end if
+    #end enable_async_calls
+
+    def _call_async(self, func, args) :
+        assert self.loop != None, "enable_async_calls not called"
+        entry = _WorkQueueEntry \
+          (
+            func = func,
+            args = args,
+            done_fute = self.loop.create_future(),
+          )
+        self._work_queue.put(entry)
+        return \
+            entry.done_fute
+    #end _call_async
+
     def __del__(self) :
         if self._smbobj != None :
+            if self._work_queue != None :
+                self._work_queue.put(_WorkQueueEntry(func = None, args = None, done_fute = None))
+            #end if
             smbc.smbc_free_context(self._smbobj, 1)
             self._smbobj = None
         #end if
@@ -931,6 +1019,10 @@ class Context :
 
     def close(self, shutdown_ctx) :
         if self._smbobj != None :
+            if self._work_queue != None :
+                self._work_queue.put(_WorkQueueEntry(func = None, args = None, done_fute = None))
+                self._worker_thread.join()
+            #end if
             if smbc.smbc_free_context(self._smbobj, shutdown_ctx) != 0 :
                 raise SMBError("closing Context")
             #end if
@@ -969,6 +1061,11 @@ class Context :
             File(file_smbobj, self)
     #end open
 
+    def open_async(self, fname, flags, mode) :
+        return \
+            self._call_async(self.open, (fname, flags, mode))
+    #end open_async
+
     def creat(self, fname, mode) :
         c_fname = encode_str0(fname)
         file_smbobj = smbc.smbc_getFunctionCreat(self._smbobj)(self._smbobj, c_fname, mode)
@@ -978,6 +1075,11 @@ class Context :
         return \
             File(file_smbobj, self)
     #end creat
+
+    def creat_async(self, fname, mode) :
+        return \
+            self._call_async(self.creat, (fname, mode))
+    #end creat_async
 
     def opendir(self, fname) :
         c_fname = encode_str0(fname)
@@ -989,6 +1091,11 @@ class Context :
             Dir(file_smbobj, self)
     #end opendir
 
+    def opendir_async(self, fname) :
+        return \
+            self._call_async(self.opendir, (fname,))
+    #end opendir_async
+
     def open_print_job(self, fname) :
         c_fname = encode_str0(fname)
         file_smbobj = smbc.smbc_getFunctionOpenPrintJob(self._smbobj)(self._smbobj, c_fname)
@@ -999,12 +1106,22 @@ class Context :
             File(file_smbobj, self)
     #end open_print_job
 
+    def open_print_job_async(self, fname) :
+        return \
+            self._call_async(self.open_print_job, (fname,))
+    #end open_print_job_async
+
     def unlink(self, fname) :
         c_fname = encode_str0(fname)
         if smbc.smbc_getFunctionUnlink(self._smbobj)(self._smbobj, c_fname) != 0 :
             raise SMBError("unlinking file %s" % repr(fname))
         #end if
     #end unlink
+
+    def unlink_async(self, fname) :
+        return \
+            self._call_async(self.unlink, (fname,))
+    #end unlink_async
 
     def rename(self, oname, other, nname) :
         if not isinstance(other, Context) :
@@ -1016,6 +1133,11 @@ class Context :
             raise SMBError("renaming %s to %s" % (repr(oname), repr(nname)))
         #end if
     #end rename
+
+    def rename_async(self, oname, other, nname) :
+        return \
+            self._call_async(self.rename, (oname, other, nname))
+    #end rename_async
 
     def stat(self, fname) :
         info = SMBC.c_stat_t()
@@ -1032,6 +1154,11 @@ class Context :
               ))
     #end stat
 
+    def stat_async(self, fname) :
+        return \
+            self._call_async(self.stat, (fname,))
+    #end stat_async
+
     def statvfs(self, fname) :
         info = SMBC.c_statvfs_t()
         c_fname = encode_str0(fname)
@@ -1047,12 +1174,22 @@ class Context :
               ))
     #end statvfs
 
+    def statvfs_async(self, fname) :
+        return \
+            self._call_async(self.statvfs, (fname,))
+    #end statvfs_async
+
     def mkdir(self, fname, mode) :
         c_fname = encode_str0(fname)
         if smbc.smbc_getFunctionMkdir(self._smbobj)(self._smbobj, c_fname, mode) != 0 :
             raise SMBError("creating directory %s" % repr(fname))
         #end if
     #end mkdir
+
+    def mkdir_async(self, fname, mode) :
+        return \
+            self._call_async(self.mkdir, (fname, mode))
+    #end mkdir_async
 
     def rmdir(self, fname) :
         c_fname = encode_str0(fname)
@@ -1061,12 +1198,22 @@ class Context :
         #end if
     #end rmdir
 
+    def rmdir_async(self, fname) :
+        return \
+            self._call_async(self.rmdir, (fname,))
+    #end rmdir_async
+
     def chmod(self, fname, mode) :
         c_fname = encode_str0(fname)
         if smbc.smbc_getFunctionChmod(self._smbobj)(self._smbobj, c_fname, mode) != 0 :
             raise SMBError("changing mode on %s" % repr(fname))
         #end if
     #end chmod
+
+    def chmod_async(self, fname, mode) :
+        return \
+            self._call_async(self.chmod, (fname, mode))
+    #end chmod_async
 
     def utimes(self, fname, actime, modtime) :
         "sets the (last-access, modification) times tuple as integer microseconds."
@@ -1080,6 +1227,11 @@ class Context :
             raise SMBError("setting utimes on %s" % repr(fname))
         #end if
     #end utimes
+
+    def utimes_async(self, fname, actime, modtime) :
+        return \
+            self._call_async(self.utimes, (fname, actime, modtime))
+    #end utimes_async
 
     def setxattr(self, fname, name, value, flags) :
         c_fname = encode_str0(fname)
@@ -1097,6 +1249,11 @@ class Context :
         #end if
     #end setxattr
 
+    def setxattr_async(self, fname, name, value, flags) :
+        return \
+            self._call_async(self.setxattr, (fname, name, value, flags))
+    #end setxattr_async
+
     def getxattr(self, fname, name) :
         c_fname = encode_str0(fname)
         c_name = encode_str0(name)
@@ -1113,6 +1270,11 @@ class Context :
             bytes(buf)
     #end getxattr
 
+    def getxattr_async(self, fname, name) :
+        return \
+            sellf._call_async(self, (fname, name))
+    #end getxattr_async
+
     def removexattr(self, fname, name) :
         c_fname = encode_str0(fname)
         c_name = encode_str0(name)
@@ -1120,6 +1282,11 @@ class Context :
             raise SMBError("removing xattr %s on %s" % (repr(name), repr(fname)))
         #end if
     #end removexattr
+
+    def removexattr_async(self, fname, name) :
+        return \
+            self._call_async(self.removexattr, (fname, name))
+    #end removexattr_async
 
     def listxattr(self, fname) :
         "generator which yields names of all supported attribute names in turn."
@@ -1141,6 +1308,9 @@ class Context :
             buf = buf[pos + 1:]
         #end while
     #end listxattr
+
+    # not bothering to provide listxattr_async, since listattr
+    # is implemented entirely within libsmbclient.
 
     def list_print_jobs(self, fname) :
         "returns a list of info about all print jobs matching fname."
@@ -1172,12 +1342,28 @@ class Context :
             result
     #end list_print_jobs
 
+    def list_print_jobs_async(self, fname) :
+        return \
+            self._call_async(self.list_print_jobs, (fname,))
+    #end list_print_jobs_async
+
     def unlink_print_job(self, fname, id) :
         c_fname = encode_str0(fname)
         if smbc.smbc_getFunctionUnlinkPrintJob(self._smbobj)(self._smbobj, c_fname, id) != 0 :
             raise SMBError("unlinking print job %s id %d" % (repr(fname), id))
         #end if
     #end unlink_print_job
+
+    def unlink_print_job_async(self, fname, id) :
+        return \
+            self._call_async(self.unlink_print_job, (fname, id))
+    #end unlink_print_job_async
+
+    def flush_async(self) :
+        "waits until all prior queued async operations have completed."
+        return \
+            self._call_async(lambda x : None, ())
+    #end flush_async
 
 #end Context
 def def_context_extra(Context) :
@@ -1496,6 +1682,11 @@ class GenericFile :
         self._smbobj = None
     #end close
 
+    def close_async(self) :
+        return \
+            self.parent._call_async(self.close, ())
+    #end close_async
+
 #end GenericFile
 
 class File(GenericFile) :
@@ -1532,6 +1723,11 @@ class File(GenericFile) :
         return \
             result
     #end read
+
+    def read_async(self, to_read = None) :
+        return \
+            self.parent._call_async(self.read, (to_read,))
+    #end read_async
 
     def readall(self) :
         "reads everything from file until EOF."
@@ -1572,6 +1768,11 @@ class File(GenericFile) :
             buf.tobytes()[:offset]
     #end readall
 
+    def readall_async(self) :
+        return \
+            self.parent._call_async(self.readall, ())
+    #end readall_async
+
     def readinto(self, buf) :
         "reads into a preallocated writeable bytes-like object, using at most" \
         " one underlying read call. Returns nr bytes read."
@@ -1587,6 +1788,11 @@ class File(GenericFile) :
         return \
             nrbytes
     #end readinto
+
+    def readinto_async(self, buf) :
+        return \
+            self.parent._call_async(self.readinto, (buf,))
+    #end readinto_async
 
     def write(self, data) :
         "tries to write the entire contents of the given bytes-like object," \
@@ -1606,6 +1812,11 @@ class File(GenericFile) :
         return \
             nrbytes
     #end write
+
+    def write_async(self, data) :
+        return \
+            self.parent._call_async(self.write, (data,))
+    #end write_async
 
     def splice(self, other, count, callback) :
 
@@ -1628,6 +1839,19 @@ class File(GenericFile) :
             result
     #end splice
 
+    def splice_async(self, other, count, callback) :
+
+        def do_callback(remaining) :
+            # invoked on worker thread, dispatches to caller’s callback
+            # on main thread.
+            self.parent.loop.call_soon_threadsafe(callback, remaining)
+        #end do_callback
+
+    #begin splice_async
+        return \
+            self.parent._call_async(self.splice, (other, count, do_callback))
+    #end slice_async
+
     def lseek(self, offset, whence) :
         offset = smbc.smbc_getFunctionLseek(self.parent._smbobj) \
             (self.parent._smbobj, self._smbobj, offset, whence)
@@ -1637,6 +1861,11 @@ class File(GenericFile) :
         return \
             offset
     #end lseek
+
+    def lseek_async(self, offset, whence) :
+        return \
+            self.parent._call_async(self.lseek, (offset, whence))
+    #end lseek_async
 
     def fstat(self) :
         info = SMBC.c_stat_t()
@@ -1653,6 +1882,11 @@ class File(GenericFile) :
               ))
     #end fstat
 
+    def fstat_async(self) :
+        return \
+            self.parent._call_async(self.fstat, ())
+    #end fstat_async
+
     def fstatvfs(self) :
         info = SMBC.c_statvfs_t()
         if smbc.smbc_getFunctionFstatVFS(self.parent._smbobj) \
@@ -1668,6 +1902,11 @@ class File(GenericFile) :
               ))
     #end fstatvfs
 
+    def fstatvfs_async(self) :
+        return \
+            self.parent._call_async(self.fstatvfs, ())
+    #end fstatvfs_async
+
     def ftruncate(self, offset) :
         if (
                 smbc.smbc_getFunctionFtruncate(self.parent._smbobj)
@@ -1678,6 +1917,11 @@ class File(GenericFile) :
             raise SMBError("truncating file")
         #end if
     #end ftruncate
+
+    def ftruncate_async(self, offset) :
+        return \
+            self.parent._call_async(self.ftruncate, (offset,))
+    #end ftruncate_async
 
 #end File
 
@@ -1695,8 +1939,7 @@ class Dir(GenericFile) :
 
     def get_all_dents(self) :
         self.lseekdir(0)
-        name_extra = 256
-        bufsize = ct.sizeof(SMBC.dirent) + name_extra
+        bufsize = ct.sizeof(SMBC.dirent) + SMBC.dirent_name_extra
         buf = (bufsize * ct.c_ubyte)()
         func = smbc.smbc_getFunctionGetdents(self.parent._smbobj)
         offset = 0
@@ -1728,6 +1971,66 @@ class Dir(GenericFile) :
         #end while
     #end get_all_dents
 
+    class _DentsAiter :
+        # internal class for use by get_all_dents_async.
+
+        def __init__(self, dir) :
+            self.dir = dir
+        #end __init__
+
+        def __aiter__(self) :
+            # I’m my own iterator.
+            self.bufsize = ct.sizeof(SMBC.dirent) + SMBC.dirent_name_extra
+            self.buf = (bufsize * ct.c_ubyte)()
+            self.getdents = smbc.smbc_getFunctionGetdents(self.dir.parent._smbobj)
+            self.offset = 0
+            self.nrbytes = 0
+            self.first = True
+            return \
+                self
+        #end __aiter__
+
+        async def __anext__(self) :
+            if self.first :
+                await self.dir.lseekdir_async(0)
+                self.first = False
+            #end if
+            while True :
+                if self.offset == self.nrbytes :
+                    self.nrbytes = await self.dir.parent._call_async \
+                      (
+                        self.getdents,
+                          (
+                            self.dir.parent._smbobj,
+                            self.dir._smbobj,
+                            ct.cast(ct.addressof(self.buf), ct.POINTER(SMBC.dirent)),
+                            self.bufsize
+                          )
+                      )
+                    if self.nrbytes <= 0 :
+                        if self.nrbytes < 0 :
+                            raise SMBError("getting directory entries")
+                        #end if
+                        raise StopAsyncIteration("no more directory entries")
+                    #end if
+                    self.offset = 0
+                #end if
+                dirent, direntlen = _decode_dirent(ct.addressof(self.buf) + self.offset)
+                self.offset += direntlen
+                if dirent.name not in (b".", b"..") :
+                    break
+            #end while
+            return \
+                dirent
+        #end __anext__
+
+    #end _DentsAiter
+
+    def get_all_dents_async(self) :
+        return \
+            type(self)._DentsAiter(self)
+    #end get_all_dents_async
+
     def readdir(self) :
         result = ct.cast(smbc.smbc_getFunctionReaddir(self.parent._smbobj)(self.parent._smbobj, self._smbobj), ct.c_void_p).value
         if result != None :
@@ -1736,6 +2039,11 @@ class Dir(GenericFile) :
         return \
             result
     #end readdir
+
+    def readdir_async(self) :
+        return \
+            self.parent._call_async(self.readdir, ())
+    #end readdir_async
 
     if hasattr(smbc, "smbc_readdirplus") :
 
@@ -1754,6 +2062,11 @@ class Dir(GenericFile) :
                 result
         #end readdirplus
 
+        def readdirplus_async(self) :
+            return \
+                self.parent._call_async(self.readdirplus, ())
+        #end readdirplus_async
+
     #end if
 
     def telldir(self) :
@@ -1765,12 +2078,22 @@ class Dir(GenericFile) :
             offset
     #end telldir
 
+    def telldir_async(self) :
+        return \
+            self.parent._call_async(self.telldir, ())
+    #end telldir_async
+
     def lseekdir(self, offset) :
         result = smbc.smbc_getFunctionLseekdir(self.parent._smbobj)(self.parent._smbobj, self._smbobj, offset)
         if result < 0 :
             raise SMBError("setting directory offset")
         #end if
     #end lseekdir
+
+    def lseekdir_async(self, offset) :
+        return \
+            self.parent._call_async(self.lseekdir, (offset,))
+    #end lseekdir_async
 
     def notify(self, recursive, filter, timeout, notifier) :
 
@@ -1810,6 +2133,105 @@ class Dir(GenericFile) :
             raise SMBError("getting directory notifications")
         #end if
     #end notify
+
+    class _NotifyAiter :
+        # internal class for use by notify_async.
+
+        def __init__(self, dir, recursive, filter, timeout, poll) :
+            self.dir = dir
+            self.recursive = recursive
+            self.filter = filter
+            self.timeout = timeout
+            self.poll = poll
+            self.notifs = asyncio.Queue()
+        #end __init__
+
+        def __aiter__(self) :
+            # I’m my own iterator.
+            self.last_call = time.time()
+            self.done_fute = self.dir.parent._call_async(self.run_notifications, ())
+            return \
+                self
+        #end __aiter__
+
+        def run_notifications(self) :
+
+            w_self = weak_ref(self)
+
+            def return_notif(self, items) :
+                for item in items :
+                    self.notifs.put_nowait(item)
+                #end for
+            #end return_notif
+
+            @SMBC.notify_callback_fn
+            def c_notifier(c_actions, nr_actions, _) :
+                now = time.time()
+                self = _wderef(w_self, "Dir._NotifyAiter")
+                items = []
+                for i in range(nr_actions) :
+                    item = c_actions[i]
+                    items.append \
+                      (
+                        NotifyCallbackAction(action = item.action, filename = item.filename)
+                      )
+                #end if
+                if len(items) != 0 :
+                    self.dir.parent.loop.call_soon_threadsafe(return_notif, self, items)
+                    self.last_call = now
+                    stopping = False
+                else :
+                    stopping = now - self.last_call > self.timeout
+                #end if
+                if stopping :
+                    self.dir.parent.loop.call_soon_threadsafe(return_notif, self, [None])
+                #end if
+                return \
+                    int(stopping)
+            #end c_notifier
+
+        #begin run_notifications
+            if (
+                    smbc.smbc_getFunctionNotify(self.dir.parent._smbobj)
+                        (
+                            self.dir.parent._smbobj,
+                            self.dir._smbobj,
+                            self.recursive,
+                            self.filter,
+                            round(self.poll * THOUSAND),
+                            c_notifier,
+                            None
+                        )
+                !=
+                    0
+            ) :
+                raise SMBError("getting async directory notifications")
+            #end if
+        #end run_notifications
+
+        async def __anext__(self) :
+            item = await self.notifs.get()
+            if item == None :
+                await self.done_fute # might raise exception
+                raise StopAsyncIteration("end of async directory notifications")
+            #end if
+            return \
+                item
+        #end __anext__
+
+    #end _NotifyAiter
+
+    def notify_async(self, recursive, filter, timeout, poll) :
+        "intended to be used in an async-for statement like this:\n" \
+        "\n" \
+        "    async for notif in «dir».notify_async(«recursive», «filter», «timeout», «poll») :" \
+        "        «process notif»\n" \
+        "    #end for\n" \
+        "\n" \
+        "where «poll» is the granularity (in seconds) at which to check the timeout."
+        return \
+            type(self)._NotifyAiter(self, recursive, filter, timeout, poll)
+    #end notify_async
 
 #end Dir
 
