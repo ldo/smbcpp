@@ -2139,12 +2139,13 @@ class Dir(GenericFile) :
     class _NotifyAiter :
         # internal class for use by notify_async.
 
-        def __init__(self, dir, recursive, filter, timeout, poll) :
+        def __init__(self, dir, recursive, filter, timeout, poll, action) :
             self.dir = dir
             self.recursive = recursive
             self.filter = filter
             self.timeout = timeout
             self.poll = poll
+            self.action = action
             self.notifs = asyncio.Queue()
         #end __init__
 
@@ -2185,6 +2186,15 @@ class Dir(GenericFile) :
                 else :
                     stopping = now - self.last_call > self.timeout
                 #end if
+                if not stopping and self.action != None :
+                    result = self.action(items)
+                    if not isinstance(result, int) :
+                        raise TypeError("action result must be int")
+                    #end if
+                    if result != 0 :
+                        stopping = True
+                    #end if
+                #end if
                 if stopping :
                     self.dir.parent.loop.call_soon_threadsafe(return_notif, self, [None])
                 #end if
@@ -2223,10 +2233,10 @@ class Dir(GenericFile) :
 
     #end _NotifyAiter
 
-    def notify_async(self, recursive, filter, timeout, poll) :
+    def notify_async(self, recursive, filter, timeout, poll, action = None) :
         "intended to be used in an async-for statement like this:\n" \
         "\n" \
-        "    async for notif in «dir».notify_async(«recursive», «filter», «timeout», «poll») :" \
+        "    async for notif in «dir».notify_async(«recursive», «filter», «timeout», «poll», «action») :" \
         "        «process notif»\n" \
         "    #end for\n" \
         "\n" \
@@ -2234,7 +2244,7 @@ class Dir(GenericFile) :
         " the loop if no further notifications have been received in that time," \
         " and «poll» is the granularity (in seconds) at which to check the timeout."
         return \
-            type(self)._NotifyAiter(self, recursive, filter, timeout, poll)
+            type(self)._NotifyAiter(self, recursive, filter, timeout, poll, action)
     #end notify_async
 
 #end Dir
