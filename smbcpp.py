@@ -756,7 +756,7 @@ class Context :
     class SimpleAuthEntry :
         "a simple table-driven mechanism for managing authentication information," \
         " as an alternative to specifying your own general callback. Keys in" \
-        " the dict are («server» «share»), («server», None) or (None, None) tuples," \
+        " the dict are («server», «share»), («server», None) or (None, None) tuples," \
         " and entries are («workgroup», «username», «password») tuples, where any of" \
         " the components can be None. A key of («server», None), if defined, is used as" \
         " a fallback if there is no specific entry for a particular («server», «share»)," \
