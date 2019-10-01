@@ -1020,6 +1020,7 @@ class Context :
     def close(self, shutdown_ctx) :
         if self._smbobj != None :
             if self._work_queue != None :
+                # queue indication for worker thread to shut down
                 self._work_queue.put(_WorkQueueEntry(func = None, args = None, done_fute = None))
                 self._worker_thread.join()
             #end if
@@ -1045,7 +1046,7 @@ class Context :
     #end set_current
 
     @classmethod
-    def get_current(self) :
+    def get_current(celf) :
         "retrieves the current global Context."
         return \
             type(self)(smbc.smbc_set_context(None))
@@ -1677,7 +1678,8 @@ class GenericFile :
 
     def close(self) :
         if self._smbobj != None :
-            getattr(smbc, "smbc_get" + self._closename)(self.parent._smbobj)(self.parent._smbobj, self._smbobj)
+            getattr(smbc, "smbc_get" + self._closename)(self.parent._smbobj) \
+                (self.parent._smbobj, self._smbobj)
         #end if
         self._smbobj = None
     #end close
@@ -2228,7 +2230,9 @@ class Dir(GenericFile) :
         "        «process notif»\n" \
         "    #end for\n" \
         "\n" \
-        "where «poll» is the granularity (in seconds) at which to check the timeout."
+        "where «timeout» is the interval in seconds after which to terminate" \
+        " the loop if no further notifications have been received in that time," \
+        " and «poll» is the granularity (in seconds) at which to check the timeout."
         return \
             type(self)._NotifyAiter(self, recursive, filter, timeout, poll)
     #end notify_async
