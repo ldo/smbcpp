@@ -231,5 +231,14 @@ should avoid mixing sync and async calls on the same Context. I’m not
 really sure how thread-safe libsmbclient really is, which is why this
 feature is probably best considered experimental for now.
 
+
+smbcpp Examples
+===============
+
+Sample code illustrating how to use smbcpp is available in my
+smbcpp_examples repo on GitLab <https://gitlab.com/ldo/smbc_examples>
+and GitHub <https://github.com/ldo/smbc_examples>.
+
+
 Lawrence D'Oliveiro <ldo@geek-central.gen.nz>
 2019 October 2
