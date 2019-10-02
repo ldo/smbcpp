@@ -1,5 +1,12 @@
-"""A pure-Python wrapper for libsmbclient <http://www.samba.org> using
-ctypes."""
+"""A pure-Python wrapper for libsmbclient <https://www.samba.org> using
+ctypes.
+
+Note that all share/directory/file specs are URLs of the form
+
+    smb://[[[«domain»;]«user»[:«password»]@]«server»[:«port»][/«share»[/«path»[/«file»]]]]
+
+(I have omitted the “options” part because libsmbclient doesn’t currently support it.)
+"""
 #+
 # Copyright 2019 Lawrence D'Oliveiro <ldo@geek-central.gen.nz>.
 # Licensed under the GNU Lesser General Public License v2.1 or later.
@@ -737,15 +744,7 @@ def _decode_dirent(adr) :
 
 class Context :
     "a libsmbclient context. Do not instantiate directly; use the create or" \
-    " get/set_current methods. Not sure if this is documented anywhere, but" \
-    " filespecs to libsmbclient take the form of URLs as follows:\n" \
-    "\n" \
-    "    smb://«server-name»/«share-name»/«path»\n" \
-    "\n" \
-    "where «server-name» is the DNS name or IP address of the server, «share-name»" \
-    " is the name of the share, and «path» is the pathname of the file or" \
-    " directory within the share (empty to reference the root directory of the share)." \
-    " «server-name» and «share-name» cannot contain slashes, but «path» can.\n" \
+    " get/set_current methods.\n" \
     "\n" \
     "Note on async calls: these are serialized on a single worker thread per Context." \
     " This is to avoid thread-safeness issues across async calls. Do not mix sync and" \
