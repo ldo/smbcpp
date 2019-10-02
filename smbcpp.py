@@ -1093,7 +1093,7 @@ class Context :
             raise SMBError("opening directory File %s" % repr(fname))
         #end if
         return \
-            Dir(file_smbobj, self)
+            Directory(file_smbobj, self)
     #end opendir
 
     def opendir_async(self, fname) :
@@ -1931,7 +1931,7 @@ class File(GenericFile) :
 
 #end File
 
-class Dir(GenericFile) :
+class Directory(GenericFile) :
     "represents an open libsmbclient directory. Do not instantiate directly;" \
     " get from Context.opendir method."
 
@@ -2175,7 +2175,7 @@ class Dir(GenericFile) :
             @SMBC.notify_callback_fn
             def c_notifier(c_actions, nr_actions, _) :
                 now = time.time()
-                self = _wderef(w_self, "Dir._NotifyAiter")
+                self = _wderef(w_self, "Directory._NotifyAiter")
                 items = []
                 for i in range(nr_actions) :
                     item = c_actions[i]
@@ -2252,7 +2252,7 @@ class Dir(GenericFile) :
             type(self)._NotifyAiter(self, recursive, filter, timeout, poll, action)
     #end notify_async
 
-#end Dir
+#end Directory
 
 def version(decode = True) :
     return \
