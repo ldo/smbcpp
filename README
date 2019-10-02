@@ -1,0 +1,205 @@
+smbcpp is a pure-Python binding for the libsmbclient library
+<https://www.samba.org/samba/docs/current/man-html/libsmbclient.7.html>
+for Python 3.5 or later. It also takes advantage of the standard Python
+asyncio event-loop library to offer asynchronous versions of the
+I/O-intensive calls.
+
+
+Basic Usage
+===========
+
+The following examples assume that some basic imports have been done:
+
+    import smbcpp
+    import os
+
+To communicate with an SMB server, you need to open a *Context*:
+
+    ctx = smbcpp.Context.create()
+
+Once suitable authentication is in place (see below), you can use
+this context to open files on the server, e.g. open an existing
+file for reading
+
+    infile = ctx.open \
+      (
+        fname = infilename,
+        flags = os.O_RDONLY,
+        mode = 0
+      )
+
+create a new file for writing
+
+    outfile = ctx.open \
+      (
+        fname = outfilename,
+        flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+        mode = 0
+      )
+
+(The os.O_EXCL bit triggers an error if the file already exists;
+omit to overwrite any existing file).
+
+Note that “infilename” and “outfilename” follow the syntax
+for smb:// URLs as described in the libsmbclient documentation
+(referenced above).
+
+The objects returned above behave very much like regular
+“raw” Python file objects:
+
+    data = infile.read(nrbytes)
+    entire_contents = infile.readall()
+
+    outfile.write(data)
+
+Close them when you’ve finished:
+
+    infile.close()
+    outfile.close()
+
+
+Authentication
+==============
+
+There are various ways to do authentication. If guest
+access is sufficient (and enabled on the server), then
+you don’t need to do anything at all. Otherwise, you
+need to specify a username and password, either in the
+URL itself or via some other way.
+
+The most general way to supply this information is
+via a *callback*. You can define your callback function
+as either
+
+    def my_auth(server, share, set_workgroup, set_username, set_password) :
+        ...
+    #end my_auth
+
+or
+
+    def my_auth_with_ctx(ctx, server, share, set_workgroup, set_username, set_password) :
+        ...
+    #end my_auth_with_ctx
+
+These are attached to the Context with
+
+    ctx.function_auth_data = my_auth
+
+or
+
+    ctx.function_auth_data_with_context = my_auth_with_ctx
+
+respectively.
+
+The arguments to these callbacks are
+* ctx -- the Context object (second form only)
+* server, share -- the server name and share name being
+  connected to, as bytes strings.
+* set_workgroup, set_username, set_password -- these are
+  `smbcpp.FBytes` objects, initially filled in with default values for
+  the workgroup name, username and password. You can change any and
+  all of these by assigning to their “value” attribute:
+
+    set_workgroup.value = «workgroup»
+    set_username.value = «username»
+    set_password.value = «password»
+
+  The values assigned must be unicode or bytes strings, cannot contain
+  null characters, and cannot exceed the maximum buffer size supplied
+  by libsmbclient (seems to be 256 bytes, less 1 for appending a
+  trailing null).
+
+If the above sounds like too much work to you, smbcpp offers an
+alternative “simple_auth” mechanism. The Context object contains a
+table mapping combinations of server names and share names to
+corresponding workgroup/username/password triples. Putting entries
+into the simple_auth table automatically installs a
+`function_auth_data` callback that will supply this information to
+libsmbclient.
+
+The mechanism allows for “wildcards”. Thus, while
+
+    ctx.simple_auth["my_server", "share1"] = («workgroup», «username», «password»)
+
+specifies authentication information to be used only for
+connecting to the share named “share1” on server “my_server”,
+
+    ctx.simple_auth["my_server", None] = ...
+
+specifies authentication information to be used for connecting to
+other shares on the same server that do not otherwise have their own
+authentication entries. For convenience, this can be shortened to
+
+    ctx.simple_auth["my_server"] = ...
+
+The ultimate fallback is
+
+    ctx.simple_auth[None] = ...
+
+which specifies how to authenticate against any server
+that does not have its own explicit entry.
+
+In the table entry tuples, any or all of the «workgroup», «username»
+and «password» fields can be None, to indicate that the default
+information supplied by libsmbclient should be used.
+
+
+Catching Errors
+===============
+
+Errors returned from libsmbclient are raised as smbcpp.SMBError
+exceptions. These can be caught, and the errno attribute examined to
+obtain the exact error code, E.g.
+
+    import errno
+
+    try :
+        ctx.mkdir(dirname, mode)
+    except smbcpp.SMBError as fail :
+        if fail.errno == errno.EPERM :
+            ... no permission to create directory ...
+        else :
+            raise # unexpected error
+        #end if
+    #end try
+
+
+Asynchronous Calls
+==================
+
+As an experimental feature, smbcpp also offers asynchronous versions
+of all calls that involve communication with the server. To enable
+such calls, you have to attach your Context to an asyncio event loop.
+E.g. to use the default loop:
+
+    import asyncio
+
+    loop = asyncio.get_event_loop()
+    ctx.enable_async_calls(loop)
+
+This also enables async calls from all File and Directory objects
+opened from this Context.
+
+Now, within a coroutine (as defined with “async def”), instead of
+doing, for example, a blocking read:
+
+    data = infile.read(nrbytes)
+
+you can use the asynchronous version:
+
+    data = await infile.read_async(nrbytes)
+
+This blocks the current event-loop task until the read
+completes, but allows other tasks to run in the meantime.
+
+This feature is implemented by creating a *worker thread* for each
+Context on which async calls are enabled. All async calls on that
+Context (and on its dependent File and Directory objects) are executed
+synchronously in turn on this thread, and then results (including
+possible exceptions) are returned to your code on the main thread. You
+should avoid mixing sync and async calls on the same Context. I’m not
+really sure how thread-safe libsmbclient really is, which is why this
+feature is probably best considered experimental for now.
+
+Lawrence D'Oliveiro <ldo@geek-central.gen.nz>
+2019 October 2
