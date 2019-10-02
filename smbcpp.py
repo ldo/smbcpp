@@ -652,6 +652,8 @@ class FBytes :
             pass
         elif isinstance(val, bytearray) or isinstance(val, array.array) and val.typecode == "B" :
             val = bytes(val)
+        elif isinstance(val, str) :
+            val = val.encode()
         elif isinstance(val, ct.POINTER(ct.c_char)) :
             val = ct.cast(val, ct.c_char_p).value
         else :
