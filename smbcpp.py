@@ -985,6 +985,8 @@ class Context :
         if self._work_queue == None :
             self.loop = loop
             self._work_queue = queue.SimpleQueue()
+              # needs to be thread-safe -- used for passing requests to
+              # worker thread
             self._worker_thread = threading.Thread \
               (
                 target = type(self)._process_work_queue,
@@ -2149,6 +2151,7 @@ class Dir(GenericFile) :
             self.poll = poll
             self.action = action
             self.notifs = asyncio.Queue()
+              # doesn’t need to be threadsafe -- only accessed on main thread
         #end __init__
 
         def __aiter__(self) :
