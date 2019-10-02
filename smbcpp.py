@@ -720,6 +720,7 @@ def decode_bytes0(b, decode) :
 #end decode_bytes0
 
 def decode_timespec(t) :
+    "decodes a c_timespec_t into integer nanoseconds."
     return \
         t.tv_sec * BILLION + t.tv_nsec
 #end decode_timespec
