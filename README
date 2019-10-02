@@ -26,6 +26,9 @@ Some examples of valid forms:
       show all workgroups
     smb://«server»
       show shares on named server accessible to guest (default) user
+    smb://«server»:«port»
+      show shares on named server accessible to guest (default) user,
+      connecting to port «port» rather than the default 139
     smb://«user»@«server»/«share»/
       access share named «share» as user «user» (no password)
     smb://«user»:«password»@«server»/«share»/«path»
