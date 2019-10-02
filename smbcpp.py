@@ -13,6 +13,7 @@ Note that all share/directory/file specs are URLs of the form
 #-
 
 import os
+import errno
 import time
 import ctypes as ct
 from weakref import \
@@ -1263,19 +1264,29 @@ class Context :
     #end setxattr_async
 
     def getxattr(self, fname, name) :
+        "returns None if attribute is valid, but item has no value for it."
         c_fname = encode_str0(fname)
         c_name = encode_str0(name)
         func = smbc.smbc_getFunctionGetxattr(self._smbobj)
         bufsize = func(self._smbobj, c_fname, c_name, None, 0)
         if bufsize < 0 :
-            raise SMBError("getting size of value of xattr %s for %s" % (repr(name), repr(fname)))
+            if ct.get_errno() == errno.ENODATA :
+                bufsize = None
+            else :
+                raise SMBError("getting size of value of xattr %s for %s" % (repr(name), repr(fname)))
+            #end if
         #end if
-        buf = bytearray(bufsize)
-        if func(self._smbobj, c_fname, c_name, ct.addressof((ct.c_ubyte * bufsize).from_buffer(buf)), bufsize) < 0 :
-            raise SMBError("getting value of xattr %s for %s" % (repr(name), repr(fname)))
+        if bufsize != None :
+            buf = bytearray(bufsize)
+            if func(self._smbobj, c_fname, c_name, ct.addressof((ct.c_ubyte * bufsize).from_buffer(buf)), bufsize) < 0 :
+                raise SMBError("getting value of xattr %s for %s" % (repr(name), repr(fname)))
+            #end if
+            result = decode_bytes0(bytes(buf), self.decode_bytes)
+        else :
+            result = None
         #end if
         return \
-            decode_bytes0(bytes(buf), self.decode_bytes)
+            result
     #end getxattr
 
     def getxattr_async(self, fname, name) :
