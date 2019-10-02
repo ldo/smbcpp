@@ -1242,6 +1242,9 @@ class Context :
         c_fname = encode_str0(fname)
         c_name = encode_str0(name)
         valuelen = len(value)
+        if isinstance(value, str) :
+            value = value.encode()
+        #end if
         if isinstance(value, bytes) :
             valueadr = ct.cast(value, ct.c_void_p).value
         elif isinstance(value, bytearray) or isinstance(value, array.array) and value.typecode == "B" :
