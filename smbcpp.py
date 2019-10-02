@@ -724,7 +724,7 @@ def decode_timespec(t) :
         t.tv_sec * BILLION + t.tv_nsec
 #end decode_timespec
 
-def _decode_dirent(adr) :
+def _decode_dirent(adr, decode_bytes) :
     de = ct.cast(adr, ct.POINTER(SMBC.dirent)).contents
     if de.comment != None :
         comment = bytes(ct.cast(de.comment, ct.POINTER(de.commentlen * ct.c_char)).contents)
@@ -735,8 +735,8 @@ def _decode_dirent(adr) :
     dirent = Dirent \
       (
         smbc_type = de.smbc_type,
-        comment = comment,
-        name = name
+        comment = decode_bytes0(comment, decode_bytes),
+        name = decode_bytes0(name, decode_bytes)
       )
     return \
         dirent, de.dirlen
@@ -1953,7 +1953,7 @@ class Directory(GenericFile) :
             while True :
                 if offset == nrbytes :
                     break
-                dirent, direntlen = _decode_dirent(ct.addressof(buf) + offset)
+                dirent, direntlen = _decode_dirent(ct.addressof(buf) + offset, self.parent.decode_bytes)
                 if dirent.name not in (b".", b"..") :
                     yield dirent
                 #end if
@@ -2020,7 +2020,7 @@ class Directory(GenericFile) :
                     #end if
                     self.offset = 0
                 #end if
-                dirent, direntlen = _decode_dirent(ct.addressof(self.buf) + self.offset)
+                dirent, direntlen = _decode_dirent(ct.addressof(self.buf) + self.offset, self.parent.decode_bytes)
                 self.offset += direntlen
                 if dirent.name not in (b".", b"..") :
                     break
@@ -2039,7 +2039,7 @@ class Directory(GenericFile) :
     def readdir(self) :
         result = ct.cast(smbc.smbc_getFunctionReaddir(self.parent._smbobj)(self.parent._smbobj, self._smbobj), ct.c_void_p).value
         if result != None :
-            result = _decode_dirent(result)[0]
+            result = _decode_dirent(result, self.parent.decode_bytes)[0]
         #end if
         return \
             result
@@ -2056,12 +2056,19 @@ class Directory(GenericFile) :
             result = ct.cast(smbc.smbc_getFunctionReaddirPlus(self.parent._smbobj)(self.parent._smbobj, self._smbobj), ct.c_void_p).value
             if result != None :
                 info = ct.cast(result, ct.POINTER(SMBC.file_info)).contents
-                result = \
-                    FileInfo \
-                      (*(
-                        (lambda x : x, decode_timespec)[f[0].endswith("time_ts")](getattr(info, f[0]))
-                        for f in SMBC.file_info._fields_
-                      ))
+                result = FileInfo \
+                  (
+                    size = info.size,
+                    attrs = info.attrs,
+                    uid = info.uid,
+                    gid = info.gid,
+                    btime_ts = decode_timespec(info.btime_ts),
+                    mtime_ts = decode_timespec(info.mtime_ts),
+                    atime_ts = decode_timespec(info.atime_ts),
+                    ctime_ts = decode_timespec(info.ctime_ts),
+                    name = decode_bytes0(info.name, self.parent.decode_bytes),
+                    short_name = decode_bytes0(info.short_name, self.parent.decode_bytes),
+                  )
             #end if
             return \
                 result
