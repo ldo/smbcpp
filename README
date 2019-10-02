@@ -1,8 +1,33 @@
-smbcpp is a pure-Python binding for the libsmbclient library
-<https://www.samba.org/samba/docs/current/man-html/libsmbclient.7.html>
+smbcpp is a pure-Python binding for the
+[libsmbclient library](https://www.samba.org/samba/docs/current/man-html/libsmbclient.7.html)
 for Python 3.5 or later. It also takes advantage of the standard Python
 asyncio event-loop library to offer asynchronous versions of the
 I/O-intensive calls.
+
+
+SMB URL Format
+==============
+
+**Note** that the description of smb:// URLs in the above page
+is currently **wrong**. The correct information will be found
+in the Samba source code, in the file
+[`source3/libsmb/libsmb_path.c`](https://git.samba.org/?p=samba.git;a=blob;f=source3/libsmb/libsmb_path.c),
+as part of the description of the `SMBC_parse_path` routine.
+The format looks like this:
+
+    smb://[[[«domain»;]«user»[:«password»]@]«server»[:«port»][/«share»[/«path»[/«file»]]]]
+
+Some examples of valid forms:
+
+    smb://
+      show all workgroups
+    smb://«server»
+      show shares on named server accessible to guest (default) user
+    smb://«user»@«server»/«share»/
+      access share named «share» as user «user» (no password)
+    smb://«user»:«password»@«server»/«share»/«path»
+      access path «path» in share named «share» on server «server»
+      as user «user» with password «password»
 
 
 Basic Usage
@@ -41,8 +66,7 @@ create a new file for writing
 omit to overwrite any existing file).
 
 Note that “infilename” and “outfilename” follow the syntax
-for smb:// URLs as described in the libsmbclient documentation
-(referenced above).
+for smb:// URLs as described above.
 
 The objects returned above behave very much like regular
 “raw” Python file objects:
