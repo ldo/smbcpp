@@ -17,6 +17,9 @@ The format looks like this:
 
     smb://[[[«domain»;]«user»[:«password»]@]«server»[:«port»][/«share»[/«path»[/«file»]]]]
 
+(I have omitted the “options” part because libsmbclient doesn’t
+currently support it.)
+
 Some examples of valid forms:
 
     smb://
