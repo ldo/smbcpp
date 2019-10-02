@@ -1272,7 +1272,7 @@ class Context :
             raise SMBError("getting value of xattr %s for %s" % (repr(name), repr(fname)))
         #end if
         return \
-            bytes(buf)
+            decode_bytes0(bytes(buf), self.decode_bytes)
     #end getxattr
 
     def getxattr_async(self, fname, name) :
