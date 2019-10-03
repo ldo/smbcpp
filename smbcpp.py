@@ -943,6 +943,43 @@ class Context :
             self
     #end init
 
+    # TODO: setLogCallback
+
+    if hasattr(smbc, "smbc_setConfiguration") :
+
+        def set_configuration(self, conffile) :
+            c_conffile = encode_str0(conffile)
+            if smbc.smbc_setConfiguration(self._smbobj, c_conffile) < 0 :
+                raise SMBError("loading config file")
+            #end if
+            return \
+                self
+        #end set_configuration
+
+    #end if
+
+    if hasattr(smbc, "smbc_setOptionProtocols") :
+
+        def set_option_protocols(self, min_proto = None, max_proto = None) :
+            if min_proto != None :
+                c_min_proto = encode_str0(min_proto)
+            else :
+                c_min_proto = None
+            #end if
+            if max_proto != None :
+                c_max_proto = encode_str0(max_proto)
+            else :
+                c_max_proto = None
+            #end if
+            if smbc.smbc_setOptionProtocols(self._smbobj, c_min_proto, c_max_proto) == 0 :
+                raise SMBError("setting protocols option")
+            #end if
+            return \
+                self
+        #end set_option_protocols
+
+    #end if
+
     def _process_work_queue(w_self) :
 
         work_queue = _wderef(w_self, "Context")._work_queue
