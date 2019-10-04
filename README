@@ -28,12 +28,15 @@ Some examples of valid forms:
       show shares on named server accessible to guest (default) user
     smb://«server»:«port»
       show shares on named server accessible to guest (default) user,
-      connecting to port «port» rather than the default 139
+      connecting to explicitly-specified port «port» rather than the
+      default 139
     smb://«user»@«server»/«share»/
       access share named «share» as user «user» (no password)
     smb://«user»:«password»@«server»/«share»/«path»
       access path «path» in share named «share» on server «server»
       as user «user» with password «password»
+    smb://«user»:«password»@«server»:«port»/«share»/«path»
+      as above, with explicit port specification.
 
 
 Basic Usage
@@ -81,6 +84,9 @@ The objects returned above behave very much like regular
     entire_contents = infile.readall()
 
     outfile.write(data)
+
+Note that all I/O is binary, so you will need to pass
+and return `bytes` objects.
 
 Close them when you’ve finished:
 
