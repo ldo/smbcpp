@@ -183,8 +183,8 @@ information supplied by libsmbclient should be used.
 Catching Errors
 ===============
 
-Errors returned from libsmbclient are raised as smbcpp.SMBError
-exceptions. These can be caught, and the errno attribute examined to
+Errors returned from libsmbclient are raised as `smbcpp.SMBError`
+exceptions. These can be caught, and the `errno` attribute examined to
 obtain the exact error code, E.g.
 
     import errno
@@ -242,9 +242,9 @@ smbcpp Examples
 ===============
 
 Sample code illustrating how to use smbcpp is available in my
-smbcpp_examples repo on GitLab <https://gitlab.com/ldo/smbc_examples>
-and GitHub <https://github.com/ldo/smbc_examples>.
+smbcpp_examples repo on GitLab <https://gitlab.com/ldo/smbcpp_examples>
+and GitHub <https://github.com/ldo/smbcpp_examples>.
 
 
 Lawrence D'Oliveiro <ldo@geek-central.gen.nz>
-2019 October 2
+2019 October 4
