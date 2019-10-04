@@ -2198,8 +2198,9 @@ class Directory(GenericFile) :
         #end if
     #end notify
 
-    class _NotifyAiter :
-        # internal class for use by notify_async.
+    class AsyncNotifier :
+        "a notification object returned by Directory.notify_async(). Do" \
+        " not instantiate directly; get instances from that call."
 
         def __init__(self, dir, recursive, filter, timeout, poll, action) :
             self.dir = dir
@@ -2210,17 +2211,18 @@ class Directory(GenericFile) :
             self.action = action
             self.notifs = asyncio.Queue()
               # doesn’t need to be threadsafe -- only accessed on main thread
+            self.stopping = False
+            self.last_call = time.time()
+            self.done_fute = self.dir.parent._call_async(self._run_notifications, ())
         #end __init__
 
-        def __aiter__(self) :
-            # I’m my own iterator.
-            self.last_call = time.time()
-            self.done_fute = self.dir.parent._call_async(self.run_notifications, ())
-            return \
-                self
-        #end __aiter__
+        def __del__(self) :
+            self.stop()
+        #end __del__
 
-        def run_notifications(self) :
+        def _run_notifications(self) :
+            # runs on the worker thread to actually collect the notifications
+            # and return them to the main thread.
 
             w_self = weak_ref(self)
 
@@ -2233,7 +2235,7 @@ class Directory(GenericFile) :
             @SMBC.notify_callback_fn
             def c_notifier(c_actions, nr_actions, _) :
                 now = time.time()
-                self = _wderef(w_self, "Directory._NotifyAiter")
+                self = _wderef(w_self, "Directory.AsyncNotifier")
                 items = []
                 for i in range(nr_actions) :
                     item = c_actions[i]
@@ -2246,8 +2248,11 @@ class Directory(GenericFile) :
                     self.dir.parent.loop.call_soon_threadsafe(return_notif, self, items)
                     self.last_call = now
                     stopping = False
-                else :
+                elif self.timeout != None :
                     stopping = now - self.last_call > self.timeout
+                #end if
+                if self.stopping :
+                    stopping = True
                 #end if
                 if not stopping and self.action != None :
                     result = self.action(items)
@@ -2265,7 +2270,7 @@ class Directory(GenericFile) :
                     int(stopping)
             #end c_notifier
 
-        #begin run_notifications
+        #begin _run_notifications
             if (
                     smbc.smbc_getFunctionNotify(self.dir.parent._smbobj)
                         (
@@ -2282,9 +2287,31 @@ class Directory(GenericFile) :
             ) :
                 raise SMBError("getting async directory notifications")
             #end if
-        #end run_notifications
+        #end _run_notifications
+
+        def get(self) :
+            "awaits and returns the next available notification. Returns" \
+            " None on timeout."
+            return \
+                self.notifs.get()
+        #end get
+
+        def stop(self) :
+            "tells worker-thread action to stop sending notifications" \
+            " at its earliest convenience. May safely be called even" \
+            " after notifications have stopped."
+            self.stopping = True
+        #end stop
+
+        def __aiter__(self) :
+            # for use with async-for.
+            # I’m my own iterator.
+            return \
+                self
+        #end __aiter__
 
         async def __anext__(self) :
+            # for use with async-for.
             item = await self.notifs.get()
             if item == None :
                 await self.done_fute # might raise exception
@@ -2294,20 +2321,34 @@ class Directory(GenericFile) :
                 item
         #end __anext__
 
-    #end _NotifyAiter
+    #end AsyncNotifier
 
     def notify_async(self, recursive, filter, timeout, poll, action = None) :
-        "intended to be used in an async-for statement like this:\n" \
+        "starts a notify call running on the parent Context for this Directory," \
+        " allowing asynchronous retrieval of notification events." \
+        " recursive, filter and timeout have the same meaning as for notify," \
+        " except that the timeout is only checked at a granularity given by poll.\n" \
         "\n" \
-        "    async for notif in «dir».notify_async(«recursive», «filter», «timeout», «poll», «action») :" \
+        "Notification events may be retrieved from the returned AsyncNotifier object" \
+        " in one of two ways. One way uses its get() method, something like\n" \
+        "\n" \
+        "    notifs = «dir».notify_async(...)\n" \
+        "    while «cond» :\n" \
+        "        notif = await notifs.get()\n" \
+        "        if notif == None : # timeout\n" \
+        "            break\n" \
+        "        ... «process notif» ...\n" \
+        "    #end while\n" \
+        "    notifs.stop()\n" \
+        "\n" \
+        "Alternatively, the AsyncNotifier can be used in an async-for" \
+        " statement like this:\n" \
+        "\n" \
+        "    async for notif in «dir».notify_async(...) :\n" \
         "        «process notif»\n" \
-        "    #end for\n" \
-        "\n" \
-        "where «timeout» is the interval in seconds after which to terminate" \
-        " the loop if no further notifications have been received in that time," \
-        " and «poll» is the granularity (in seconds) at which to check the timeout."
+        "    #end for\n"
         return \
-            type(self)._NotifyAiter(self, recursive, filter, timeout, poll, action)
+            type(self).AsyncNotifier(self, recursive, filter, timeout, poll, action)
     #end notify_async
 
 #end Directory
