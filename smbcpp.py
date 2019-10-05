@@ -208,8 +208,7 @@ class SMBC :
     #end dirent
     direntsize = {4 : 20, 8 : 28}[ct.sizeof(ct.c_void_p)]
       # exclude padding on end of dirent struct
-    dirent_name_extra = 256
-      # sufficient for longest possible pathname component in Linux
+    NAME_MAX = 255 # from <linux/limits.h>
 
     class file_info(ct.Structure) :
         pass
@@ -1996,7 +1995,9 @@ class Directory(GenericFile) :
 
     def get_all_dents(self) :
         self.lseekdir(0)
-        bufsize = ct.sizeof(SMBC.dirent) + SMBC.dirent_name_extra
+        bufsize = ct.sizeof(SMBC.dirent) + SMBC.NAME_MAX
+        align = ct.sizeof(ct.c_void_p)
+        bufsize = bufsize + align - 1 & - align
         buf = (bufsize * ct.c_ubyte)()
         func = smbc.smbc_getFunctionGetdents(self.parent._smbobj)
         offset = 0
