@@ -2366,6 +2366,8 @@ class Directory(GenericFile) :
 
 #end Directory
 
+# TODO: compatibility calls?
+
 def version(decode = True) :
     return \
         decode_bytes0(smbc.smbc_version(), decode)
