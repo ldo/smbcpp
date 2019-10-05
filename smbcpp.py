@@ -2247,7 +2247,7 @@ class Directory(GenericFile) :
                     item = c_actions[i]
                     action = NotifyCallbackAction(action = item.action, filename = item.filename)
                     if self.action != None :
-                        result = self.action(item)
+                        result = self.action(action)
                         if not isinstance(result, int) :
                             raise TypeError("action result must be int")
                         #end if
