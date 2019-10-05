@@ -2214,6 +2214,8 @@ class Directory(GenericFile) :
             self.stopping = False
             self.last_call = time.time()
             self.done_fute = self.dir.parent._call_async(self._run_notifications, ())
+            self.async_for = False
+            self.end_marker = object()
         #end __init__
 
         def __del__(self) :
@@ -2237,34 +2239,43 @@ class Directory(GenericFile) :
                 now = time.time()
                 self = _wderef(w_self, "Directory.AsyncNotifier")
                 items = []
-                for i in range(nr_actions) :
+                i = 0
+                stopping = False
+                while True :
+                    if i == nr_actions :
+                        break
                     item = c_actions[i]
-                    items.append \
-                      (
-                        NotifyCallbackAction(action = item.action, filename = item.filename)
-                      )
-                #end if
+                    action = NotifyCallbackAction(action = item.action, filename = item.filename)
+                    if self.action != None :
+                        result = self.action(item)
+                        if not isinstance(result, int) :
+                            raise TypeError("action result must be int")
+                        #end if
+                        if result != 0 :
+                            stopping = True
+                            break
+                        #end if
+                    #end if
+                    items.append(action)
+                    i += 1
+                #end while
                 if len(items) != 0 :
                     self.dir.parent.loop.call_soon_threadsafe(return_notif, self, items)
                     self.last_call = now
-                    stopping = False
-                elif self.timeout != None :
-                    stopping = now - self.last_call > self.timeout
                 #end if
                 if self.stopping :
                     stopping = True
                 #end if
-                if not stopping and self.action != None :
-                    result = self.action(items)
-                    if not isinstance(result, int) :
-                        raise TypeError("action result must be int")
-                    #end if
-                    if result != 0 :
+                if not stopping and self.timeout != None and now - self.last_call > self.timeout :
+                    if self.async_for :
                         stopping = True
+                    else :
+                        self.dir.parent.loop.call_soon_threadsafe(return_notif, self, [None])
+                        self.last_call = now
                     #end if
                 #end if
                 if stopping :
-                    self.dir.parent.loop.call_soon_threadsafe(return_notif, self, [None])
+                    self.dir.parent.loop.call_soon_threadsafe(return_notif, self, [self.end_marker])
                 #end if
                 return \
                     int(stopping)
@@ -2305,6 +2316,7 @@ class Directory(GenericFile) :
 
         def __aiter__(self) :
             # for use with async-for.
+            self.async_for = True
             # I’m my own iterator.
             return \
                 self
@@ -2313,7 +2325,7 @@ class Directory(GenericFile) :
         async def __anext__(self) :
             # for use with async-for.
             item = await self.notifs.get()
-            if item == None :
+            if item is self.end_marker :
                 await self.done_fute # might raise exception
                 raise StopAsyncIteration("end of async directory notifications")
             #end if
