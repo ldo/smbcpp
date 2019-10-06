@@ -2250,7 +2250,6 @@ class Directory(GenericFile) :
                 now = time.time()
                 self = _wderef(w_self, "Directory.AsyncNotifier")
                 items = []
-                i = 0
                 stopping = False
                 for i in range(nr_actions) :
                     item = c_actions[i]
