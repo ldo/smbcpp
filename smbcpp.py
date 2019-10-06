@@ -2231,6 +2231,16 @@ class Directory(GenericFile) :
 
             def return_notif(self, items) :
                 for item in items :
+                    if self.action != None :
+                        result = self.action(item)
+                        if not isinstance(result, int) :
+                            raise TypeError("action result must be int")
+                        #end if
+                        if result != 0 :
+                            self.stop()
+                            break
+                        #end if
+                    #end if
                     self.notifs.put_nowait(item)
                 #end for
             #end return_notif
@@ -2242,24 +2252,13 @@ class Directory(GenericFile) :
                 items = []
                 i = 0
                 stopping = False
-                while True :
-                    if i == nr_actions :
-                        break
+                for i in range(nr_actions) :
                     item = c_actions[i]
-                    action = NotifyCallbackAction(action = item.action, filename = item.filename)
-                    if self.action != None :
-                        result = self.action(action)
-                        if not isinstance(result, int) :
-                            raise TypeError("action result must be int")
-                        #end if
-                        if result != 0 :
-                            stopping = True
-                            break
-                        #end if
-                    #end if
-                    items.append(action)
-                    i += 1
-                #end while
+                    items.append \
+                      (
+                        NotifyCallbackAction(action = item.action, filename = item.filename)
+                      )
+                #end for
                 if len(items) != 0 :
                     self.dir.parent.loop.call_soon_threadsafe(return_notif, self, items)
                     self.last_call = now
