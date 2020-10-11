@@ -709,11 +709,13 @@ def encode_str0(s) :
 def decode_bytes0(b, decode) :
     if decode :
         b = b.decode()
+        endmark = "\0"
     else :
-        endpos = b.find(0)
-        if endpos >= 0 :
-            b = b[:endpos]
-        #end if
+        endmark = 0
+    #end if
+    endpos = b.find(endmark)
+    if endpos >= 0 :
+        b = b[:endpos]
     #end if
     return \
         b
