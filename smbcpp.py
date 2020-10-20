@@ -1306,8 +1306,8 @@ class Context :
         c_fname = encode_str0(fname)
         c_name = encode_str0(name)
         func = smbc.smbc_getFunctionGetxattr(self._smbobj)
-        bufsize = func(self._smbobj, c_fname, c_name, None, 0)
-        if bufsize < 0 :
+        bufsize = func(self._smbobj, c_fname, c_name, None, 0) + 1
+        if bufsize <= 0 :
             if ct.get_errno() == errno.ENODATA :
                 bufsize = None
             else :
