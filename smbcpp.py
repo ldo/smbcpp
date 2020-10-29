@@ -862,7 +862,7 @@ class Context :
 
         def __contains__(self, key) :
             return \
-                self.__getitem(self.validate_key(key)) != (None, None, None)
+                self.__getitem__(self.validate_key(key)) != (None, None, None)
         #end __contains__
 
         def __delitem__(self, key) :
