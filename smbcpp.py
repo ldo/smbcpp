@@ -1092,7 +1092,7 @@ class Context :
     def get_current(celf) :
         "retrieves the current global Context."
         return \
-            type(self)(smbc.smbc_set_context(None))
+            celf(smbc.smbc_set_context(None))
     #end get_current
 
     def open(self, fname, flags, mode) :
