@@ -8,7 +8,7 @@ Note that all share/directory/file specs are URLs of the form
 (I have omitted the “options” part because libsmbclient doesn’t currently support it.)
 """
 #+
-# Copyright 2019 Lawrence D'Oliveiro <ldo@geek-central.gen.nz>.
+# Copyright 2019-2020 Lawrence D'Oliveiro <ldo@geek-central.gen.nz>.
 # Licensed under the GNU Lesser General Public License v2.1 or later.
 #-
 
@@ -620,6 +620,58 @@ if hasattr(smbc, "smbc_thread_posix") :
 #end if
 
 #+
+# Global work-queue management
+#
+# Nonblocking calls are implemented by running them on a separate
+# thread. Unfortunately, libsmbclient is not threadsafe, so my
+# original plan of one thread per Context object had to be abandoned.
+# A single shared global worker thread seems to work. That may not
+# offer improved performance, but at least it lets the event loop keep
+# running.
+#-
+
+_work_queue = None
+_WorkQueueEntry = namedtuple("_WorkQueueEntry", ("ctx", "func", "args", "done_fute"))
+_worker_thread = None
+
+def _process_work_queue() :
+    # runs on the worker thread to fetch and dispatch work queue
+    # entries and return the results.
+
+    def return_result(w_done_fute, result) :
+        done_fute = w_done_fute()
+        if done_fute != None and not done_fute.done() :
+            done_fute.set_result(result)
+        #end if
+    #end return_result
+
+    def return_exception(w_done_fute, fail) :
+        done_fute = w_done_fute()
+        if done_fute != None and not done_fute.done() :
+            done_fute.set_exception(fail)
+        #end if
+    #end return_exception
+
+#begin _process_work_queue
+    while True :
+        entry = _work_queue.get()
+        if entry.func == None :
+            # end-of-work indicator
+            break
+        if entry.ctx._smbobj != None :
+            assert entry.ctx.loop != None
+            try :
+                result = entry.func(*entry.args)
+            except Exception as fail :
+                entry.ctx.loop.call_soon_threadsafe(return_exception, weak_ref(entry.done_fute), fail)
+            else :
+                entry.ctx.loop.call_soon_threadsafe(return_result, weak_ref(entry.done_fute), result)
+            #end try
+        #end if
+    #end while
+#end _process_work_queue
+
+#+
 # Higher-level stuff begins here
 #-
 
@@ -688,8 +740,6 @@ class FBytes :
     #end __repr__
 
 #end FBytes
-
-_WorkQueueEntry = namedtuple("_WorkQueueEntry", ("func", "args", "done_fute"))
 
 def encode_str0(s) :
     if isinstance(s, str) :
@@ -760,8 +810,6 @@ class Context :
             "simple_auth",
             "loop",
             "__weakref__",
-            "_worker_thread",
-            "_work_queue",
             "_function_auth_data",
             "_function_auth_data_with_context",
             # need to keep references to ctypes-wrapped functions
@@ -903,8 +951,6 @@ class Context :
             self._smbobj = _smbobj
             self.decode_bytes = True
             self.simple_auth = celf.SimpleAuthEntry(self)
-            self._worker_thread = None
-            self._work_queue = None
             self.loop = None
             self._wrap_function_auth_data = None
             self._wrap_function_auth_data_with_context = None
@@ -981,57 +1027,25 @@ class Context :
 
     #end if
 
-    def _process_work_queue(w_self) :
-
-        work_queue = _wderef(w_self, "Context")._work_queue
-
-        def return_result(w_done_fute, result) :
-            done_fute = w_done_fute()
-            if done_fute != None and not done_fute.done() :
-                done_fute.set_result(result)
-            #end if
-        #end return_result
-
-        def return_exception(w_done_fute, fail) :
-            done_fute = w_done_fute()
-            if done_fute != None and not done_fute.done() :
-                done_fute.set_exception(fail)
-            #end if
-        #end return_exception
-
-    #begin _process_work_queue
-        while True :
-            entry = work_queue.get()
-            if entry.func == None :
-                # end-of-work indicator
-                break
-            try :
-                result = entry.func(*entry.args)
-            except Exception as fail :
-                _wderef(w_self, "Context") \
-                    .loop.call_soon_threadsafe(return_exception, weak_ref(entry.done_fute), fail)
-            else :
-                _wderef(w_self, "Context") \
-                    .loop.call_soon_threadsafe(return_result, weak_ref(entry.done_fute), result)
-            #end try
-        #end while
-    #end _process_work_queue
-
     def enable_async_calls(self, loop = None) :
+        global _work_queue, _worker_thread
         if loop == None :
             loop = asyncio.get_event_loop()
         #end if
-        if self._work_queue == None :
+        if self.loop == None :
             self.loop = loop
-            self._work_queue = queue.SimpleQueue()
-              # needs to be thread-safe -- used for passing requests to
-              # worker thread
-            self._worker_thread = threading.Thread \
-              (
-                target = type(self)._process_work_queue,
-                args = (weak_ref(self),),
-              )
-            self._worker_thread.start()
+            if _worker_thread == None :
+                _work_queue = queue.SimpleQueue()
+                  # needs to be thread-safe -- used for passing requests to
+                  # worker thread
+                _worker_thread = threading.Thread \
+                  (
+                    target = _process_work_queue,
+                    args = (),
+                    daemon = True
+                  )
+                _worker_thread.start()
+            #end if
         else :
             assert self.loop == loop
         #end if
@@ -1041,20 +1055,18 @@ class Context :
         assert self.loop != None, "enable_async_calls not called"
         entry = _WorkQueueEntry \
           (
+            ctx = self,
             func = func,
             args = args,
             done_fute = self.loop.create_future(),
           )
-        self._work_queue.put(entry)
+        _work_queue.put(entry)
         return \
             entry.done_fute
     #end _call_async
 
     def __del__(self) :
         if self._smbobj != None :
-            if self._work_queue != None :
-                self._work_queue.put(_WorkQueueEntry(func = None, args = None, done_fute = None))
-            #end if
             smbc.smbc_free_context(self._smbobj, 1)
             self._smbobj = None
         #end if
@@ -1062,11 +1074,6 @@ class Context :
 
     def close(self, shutdown_ctx) :
         if self._smbobj != None :
-            if self._work_queue != None :
-                # queue indication for worker thread to shut down
-                self._work_queue.put(_WorkQueueEntry(func = None, args = None, done_fute = None))
-                self._worker_thread.join()
-            #end if
             if smbc.smbc_free_context(self._smbobj, shutdown_ctx) != 0 :
                 raise SMBError("closing Context")
             #end if
